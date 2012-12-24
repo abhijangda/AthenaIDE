@@ -1,0 +1,14 @@
+<encoding>C++</encoding>
+<indentation>True</indentation>
+<indentwidth>    </indentwidth>
+<incindentsymbols>{ :</incindentsymbols>
+<decindentsymbols>}</decindentsymbols>
+<autosave>False</autosave>
+<autosavetimeout></autosavetimeout>
+<autosavetabs></autosavetabs>
+<wordwrap>False</wordwrap>
+<tabwidth>4</tabwidth>
+<recent files>True</recent files>
+<gcc>gcc <input> -o <output> `pkg-config --libs gtk+-2.0
+gtksourceview-2.0`</gcc>
+<g++></g++>
