@@ -1,7 +1,8 @@
 #1849 lines
-## Everything which is left to do is written in get_include_file_classes_and_members function
-## Correct the regular expression for regex_arrW in fill_cpp_code_completion function
-## So that gtk_container in gtk_vbox.cpp of gtk_creator project cannot be detected
+## Correct Adding functions also
+## print at 405
+## if a class definition contains objects, in a CPP
+## for C struct in C File/Project and C++ class self.includeclassarray is used
 
 from PyQt4 import QtGui
 from PyQt4.Qt import QTextCursor
@@ -11,6 +12,10 @@ global indentct,indentTF
 indentct = 0
 import time,random
 import includefilethread
+from number_bar_widget import *
+from breakpoints_bar import *
+from c_cpp_types import *
+from helper_functions import *
 
 class HiddenText(object):
 
@@ -40,7 +45,6 @@ class TextCursor(QtGui.QTextCursor):
     def __init__(self,textCursor,parent=None):
 
         QtGui.QTextCursor.__init__(self,textCursor)
-
         self.parent = parent
 
     def positionWithHiddenText(self):
@@ -107,14 +111,23 @@ class txtInputclass(QtGui.QTextEdit):
         self.bracketspaired=0
         self.bigbracketspaired=0
         self.encoding = ''
-        self.datatypearray = ['char','double','float','int','long','void']
+        
+        self.includefilenamearray = []
         self.includefilefuncarray = []
-        includefilefuncposarray=[]
-        self.includefiledatatypearray = []
+        self.includefiletypedefarray = []
+        
+        global_scope = CPPClass()
+        global_scope.name="Global Scope"
         self.includefileclassarray = []
-        self.object_classarray = []
-        self.object_namearray = []
-        self.includefilenamearray=[]
+        
+        self.curr_file_class_array=[]
+        self.curr_file_func_array = []
+
+        self.list_objects=[]
+        self.list_pointers = []
+        self.list_references = []
+        
+        self.tooltip_stack=[]
         
         self.funcmatchlist = QtGui.QListWidget(self)
         self.connect(self.funcmatchlist,QtCore.SIGNAL('itemDoubleClicked(QListWidgetItem*)'),self.funcmatchlistdoubleclicked)
@@ -164,6 +177,11 @@ class txtInputclass(QtGui.QTextEdit):
 
         self.isDirty=True        
 
+    def setFileType(self,filetype):
+
+        self.filetype = filetype
+        self.includefilethread.filetype=filetype
+        
     def textCursorWithHiddenText(self):
 
         return QtGui.QTextEdit.textCursor(self)
@@ -213,8 +231,10 @@ class txtInputclass(QtGui.QTextEdit):
     def thread_finished(self):
 
         self.includefileclassarray += self.includefilethread.includefileclassarray
+        #print 'thread finished'
+        #print self.includefileclassarray
         self.includefilefuncarray += self.includefilethread.includefilefuncarray
-        self.includefiledatatypearray += self.includefilethread.includefiledatatypearray
+        self.includefiletypedefarray += self.includefilethread.list_typedef
 ##        print self.includefilethread.includefiledatatypearray
 ##        print self.includefilethread.includefilefuncarray
 ##        print self.includefilethread.includefileclassarray
@@ -261,18 +281,18 @@ class txtInputclass(QtGui.QTextEdit):
                     if start_index !=0:                        
                         #func = str(self.includefilefuncarray[start_index-1])
                         func = ''
-                        for d in str(self.includefilefuncarray[start_index-1]):
-                            if d == '*' or d == '(' or d==')'or d=='[' or d==']':
-                                func += '\\'+d
-                            else:
-                                func += d
-                        data_type = self.includefiledatatypearray[start_index-1]                        
-                        
-                        if re.findall(r'\b%s\s*%s'%(data_type,func),s)==[]:
-                            del self.includefilefuncarray[start_index-1]
-                            del self.includefiledatatypearray[start_index-1]
-                            del self.parent.combo_funcposarray[start_index-1]
-                            self.parent.combo_func.removeItem(start_index-1)
+##                        for d in str(self.includefilefuncarray[start_index-1]):
+##                            if d == '*' or d == '(' or d==')'or d=='[' or d==']':
+##                                func += '\\'+d
+##                            else:
+##                                func += d
+##                        #data_type = self.includefiledatatypearray[start_index-1]
+##                        
+##                        if re.findall(r'\b%s\s*%s'%(data_type,func),s)==[]:
+##                            del self.includefilefuncarray[start_index-1]
+##                            del self.includefiledatatypearray[start_index-1]
+##                            del self.parent.combo_funcposarray[start_index-1]
+##                            self.parent.combo_func.removeItem(start_index-1)
                         
                     for i in range(start_index,self.parent.combo_func.count()):
                         self.parent.combo_funcposarray[i] -= charsRemoved
@@ -351,14 +371,8 @@ class txtInputclass(QtGui.QTextEdit):
                                     del self.parent.combo_funcposarray[class_index][start_index]                                    
                                     self.parent.combo_func.removeItem(start_index)
                          
-                    for current_class_index in range(self.parent.combo_class.currentIndex(),self.parent.combo_class.count()):
-#                        print self.parent.combo_funcposarray
-#                        print current_class_index
-                        if len(self.parent.combo_funcposarray)>0 and self.parent.combo_funcposarray[current_class_index][0] > cc.position():
-                            start_index = 0
-                        else:
-                            start_index = self.parent.combo_func.currentIndex()+1
-                        
+                    for current_class_index in range(self.parent.combo_class.currentIndex(),self.parent.combo_class.count()):        
+                        start_index=current_class_index
                         if charsRemoved == 0:
                             for i in range(start_index,len(self.parent.combo_funcposarray[current_class_index])):
                                 self.parent.combo_funcposarray[current_class_index][i] += charsAdded
@@ -390,13 +404,16 @@ class txtInputclass(QtGui.QTextEdit):
                 cc.movePosition(cc.Up,cc.KeepAnchor,self.line-self.prev_line)
             cc.select(cc.LineUnderCursor)
             line = str(cc.selectedText())
-            self.new_include_file_list=[]            
-            
-            self.get_include_file_classes_and_members(line)
+            new_include_file_list=[]                        
+            self.get_include_file_classes_and_members(line,new_include_file_list)
             #print self.new_include_file_list
-            self.includefilethread.setfilelist(self.new_include_file_list)
-            self.includefilethread.start()
-                
+            if new_include_file_list == self.includefilethread.includefileslist:
+                #print 'llll'
+                #print self.includefilethread.includefileslist
+                #print new_include_file_list
+                self.includefilethread.setfilelist(new_include_file_list)
+                self.includefilethread.start()
+                                
             cc.setPosition(pos,cc.MoveAnchor)            
             
             QtGui.QToolTip.hideText()
@@ -429,64 +446,52 @@ class txtInputclass(QtGui.QTextEdit):
                         
             
             if self.filetype == 'C Project' or self.filetype == 'C File':
+                try:
+                    current_index = self.parent.combo_func.currentIndex()
+                    for i in range(len(self.parent.combo_funcposarray)-1,-1,-1):
+                        
+                        if self.parent.combo_funcposarray[i] < pos:                  
+                            self.parent.combo_func.setCurrentIndex(i)
+                            if i!=current_index:
+                                self.parent.find_curr_func_objects()
+                            break
+                except AttributeError:
+                    pass
                 
-                for i in range(len(self.parent.combo_funcposarray)-1,-1,-1):
-                    
-                    if self.parent.combo_funcposarray[i] < pos:                        
-                        self.parent.combo_func.setCurrentIndex(i)
-                        break
-                pass
-            else:
-                if self.filetype == 'C++ Project':
-                    try:                        
-                        if self.parent.combo_class.count() == 0:
-                            for i in range(len(self.parent.combo_funcposarray)-1,-1,-1):
-                                if self.parent.combo_funcposarray[i] < pos:
-                                    self.parent.combo_func.setCurrentIndex(i)
-                                    break
-                        else:                            
-                            min_diff= self.parent.combo_funcposarray[len(self.parent.combo_funcposarray)-1][len(self.parent.combo_funcposarray[len(self.parent.combo_funcposarray)-1])-1]
-                            class_index=-1
-                            func_index=-1
+                
+            elif self.filetype == 'C++ Project' or self.filetype=="C++ File":
+                try:                        
+                    if self.parent.combo_class.count() == 0:
+                        for i in range(len(self.parent.combo_funcposarray)-1,-1,-1):
+                            if self.parent.combo_funcposarray[i] < pos:
+                                self.parent.combo_func.setCurrentIndex(i)
+                                break
+                    else:                            
+                        min_diff= self.parent.combo_funcposarray[len(self.parent.combo_funcposarray)-1][len(self.parent.combo_funcposarray[len(self.parent.combo_funcposarray)-1])-1]
+                        class_index=-1
+                        func_index=-1
+                        
+                        for i in range(len(self.parent.combo_funcposarray)-1,-1,-1):
+                            can_break = False
+                            for j in range(len(self.parent.combo_funcposarray[i])-1,-1,-1):
+                                if self.parent.combo_funcposarray[i][j] < pos:                                       
+                                    if min_diff > pos-self.parent.combo_funcposarray[i][j]:
+                                        min_diff = pos -self.parent.combo_funcposarray[i][j]
+                                        class_index = i
+                                        func_index = j                                        
+                                    break                               
                             
-                            for i in range(len(self.parent.combo_funcposarray)-1,-1,-1):
-                                can_break = False
-                                for j in range(len(self.parent.combo_funcposarray[i])-1,-1,-1):
-                                    if self.parent.combo_funcposarray[i][j] < pos:                                       
-                                        if min_diff > pos-self.parent.combo_funcposarray[i][j]:
-                                            min_diff = pos -self.parent.combo_funcposarray[i][j]
-                                            class_index = i
-                                            func_index = j                                        
-                                        break                               
-                                
-                            if class_index !=-1 and func_index!=-1:
-                                self.parent.combo_class_item_activated(class_index)
-                                self.parent.combo_class.setCurrentIndex(class_index)
-                                self.parent.combo_func.setCurrentIndex(func_index)
-                    except:
-                        pass
-                else:
-                    if self.filetype == 'C++ File':
-                        try:
-                            if self.parent.combo_class.count() != 0:
-                                for i in range(len(self.parent.combo_funcposarray)):
-                                    can_break = False
-                                    for j in range(len(self.parent.combo_funcposarray[i])-1,-1,-1):
-                                        if self.parent.combo_funcposarray[i][j] < pos:
-                                            if self.parent.combo_class.currentIndex() != i:
-                                                self.parent.combo_class_item_activated(i)
-                                                self.parent.combo_class.setCurrentIndex(i)
-                                            self.parent.combo_func.setCurrentIndex(j)
-                                            can_break = True
-                                            break
-                                    if can_break == True:
-                                        break
-                        except:
-                            pass
-        
+                        if class_index !=-1 and func_index!=-1:
+                            self.parent.combo_class_item_activated(class_index)
+                            self.parent.combo_class.setCurrentIndex(class_index)
+                            self.parent.combo_func.setCurrentIndex(func_index)
+                except:
+                    pass
+                self.parent.find_curr_func_objects()
+            
         self.prev_line = self.line
 
-    def get_include_file_classes_and_members(self,text,file_path=''):
+    def get_include_file_classes_and_members(self,text,new_include_file_list=[],file_path=''):
 
         ## Remember to include the library files 
         ## update the status bar to show which file it is currently at        
@@ -520,124 +525,159 @@ class txtInputclass(QtGui.QTextEdit):
                 continue
             if file_path not in self.includefilenamearray:
                 self.includefilenamearray.append(file_path)                 
-                self.new_include_file_list.append(file_path)
-                print file_path
-                self.get_include_file_classes_and_members("",file_path)
+                new_include_file_list.append(file_path)                
+                self.get_include_file_classes_and_members("",new_include_file_list,file_path)
                 
     def fill_c_code_completion(self):
 
-        try:
-            self.document().contentsChange.disconnect(self.document_contents_change)
-        except:
-            pass        
-        
-        self.document().contentsChange.connect(self.document_contents_change)
-        text = str(self.toPlainText())
-        self.new_include_file_list=[]
-        self.get_include_file_classes_and_members(text)
-##      print self.new_include_file_list
-        self.includefilethread.setfilelist(self.new_include_file_list)
-        self.includefilethread.run()
-        self.thread_finished()
-        
-        self.includefilefuncarray = []
-        self.includefiledatatypearray = []
-        self.parent.combo_funcposarray=[]
-        self.parent.combo_func.clear()
         if self.filetype == 'C Project' or self.filetype == 'C File':                
-            for i in self.datatypearray:
-                for search_iter in re.finditer(r'\b%s\b\s*(\w+.+)\s*{'%i,text):
+            try:
+                self.document().contentsChange.disconnect(self.document_contents_change)
+            except:
+                pass        
+            
+            self.document().contentsChange.connect(self.document_contents_change)
+            text = str(self.toPlainText())
+            self.new_include_file_list=[]
+            new_include_file_list=[]
+            self.get_include_file_classes_and_members(text,new_include_file_list)
+            
+            self.includefilethread.setfilelist(new_include_file_list)
+            self.includefilethread.run()
+            self.thread_finished()
+            self.curr_file_func_array = []
+            self.curr_file_typedef_array = []
+            self.parent.combo_funcposarray=[]
+            self.parent.combo_func.clear()
+
+            cpp_reg_array = re.findall(r'\bstruct\b\s*\w+.+?\}\s*\;',text,re.DOTALL)
+                
+            if cpp_reg_array!=[]:
+                for class_definition in cpp_reg_array:
+                    
+                    if class_definition.count('{')>class_definition.count('}'):
+                        regex_array = re.findall(r'(?<=\}\;)\s*\w+.+?(?=\}\;)',text,re.DOTALL)
+                        count = class_definition.count('{')-class_definition.count('}')
+                        i=0
+                        while count>0 and i<len(regex_array):
+                           class_definition += regex_array[i] + '};'
+                           count = class_definition.count('{')-class_definition.count('}')
+
+                    class_definition = class_definition[class_definition.find('struct'):]
+
+                    text = text.replace(class_definition,'')
+
+                    c_struct = CStruct()
+                    c_struct.createFromDeclaration(class_definition)
+                    self.curr_file_class_array.append(c_struct)
+
+            for struct in self.includefileclassarray + self.curr_file_class_array:
+
+                d = re.findall(r'\btypedef\s+%s\s+.+'%struct.getDeclaration(),text)
+                for s in d:
+                    s = s.replace(';','')
+                    typedef = CTypedef()
+                    typedef.createFromDeclaration(s)
+                    typedef.typedef_with = struct
+                    struct.list_typedef.append(typedef)
+                    self.curr_file_typedef_array.append(struct)
+                    
+            for search_iter in re.finditer(r'[\w*]+[\s*]+[\w*]+\(+.+\)\s*{',text):
+                    #print d,filename
                     d = search_iter.group()                    
-                    d = d[d.find(i)+len(i)+1:d.rfind('\n')]                    
-                    if "(" in d and ")" in d and "=" not in d:
-                            self.includefilefuncarray.append(d)
-                            self.includefiledatatypearray.append(i)
-                            self.parent.combo_funcposarray.append(search_iter.start())
-                            #self.parent.combo_func.addItem(i+" "+d)
+                    d = d[:d.rfind('\n')]
+                    
+                    func = CFunction()
+                    func.createFromDeclaration(d)
+                    
+                    if isThisAFunction(d)==False:
+                        continue
+                    
+                    should_continue = False
+                    for _func in self.includefilefuncarray:
+                        if _func.isEqualTo(func)==True:
+                            should_continue = True
+                            break
+                    if should_continue==True:
+                        continue
+                    
+                    self.curr_file_func_array.append(func)                    
+                    self.parent.combo_funcposarray.append(search_iter.start())
+                    
             for i in range(len(self.parent.combo_funcposarray)):
-                for j in range(len(self.parent.combo_funcposarray)-1):
-                    if self.parent.combo_funcposarray[j]>self.parent.combo_funcposarray[j+1]:
-                        k = self.parent.combo_funcposarray[j+1]
-                        self.parent.combo_funcposarray[j+1]=self.parent.combo_funcposarray[j]
-                        self.parent.combo_funcposarray[j]=k
-                        k=self.includefilefuncarray[j+1]
-                        self.includefilefuncarray[j+1]=self.includefilefuncarray[j]
-                        self.includefilefuncarray[j]=k
-                        k=self.includefiledatatypearray[j+1]
-                        self.includefiledatatypearray[j+1]=self.includefiledatatypearray[j]
-                        self.includefiledatatypearray[j]=k
-            for i in range(len(self.parent.combo_funcposarray)):
-                self.parent.combo_func.addItem(self.includefiledatatypearray[i]+" "+self.includefilefuncarray[i])
+                self.parent.combo_func.addItem(self.curr_file_func_array[i].getDeclaration())
         #print self.parent.combo_funcposarray
 
+    def fill_combo_boxes(self,_class):
+
+        text = str(self.toPlainText())
+        if _class == None:
+            for __class in self.curr_file_class_array:
+                self.fill_combo_boxes(__class)
+        else:            
+            for _var in _class.list_public_members+_class.list_private_members+_class.list_protected_members:
+                for search_iter in re.search_iter(r'%s'%(getRegExpString(_var.type)+'\s*' +
+                                                         getRegExpString(_var.return_type)+'\s*'+
+                                                         getRegExpString(_var.name)),text):
+                    self.parent.combo_funcposarray.append((search_iter.start()+search_iter.end())/2)
+
+            for nested_class in _class.list_nested_class_structs:
+                self.fill_combo_boxes(nested_class)
+                
     def fill_cpp_code_completion(self):        
         
         text = str(self.toPlainText())
+        full_text = text
         self.new_include_file_list=[]
-        self.includefileclassarray =[]
-        self.includefilefuncarray =[]
-        self.includefiledatatypearray =[]
+        self.includefileclassarray =[]      
         self.includefilenamearray=[]
-        self.get_include_file_classes_and_members(text)
-        #print self.new_include_file_list
-        #print self.new_include_file_list
+        self.new_include_file_list=[]
+        new_include_file_list=[]
+        self.get_include_file_classes_and_members(text,new_include_file_list)
         
-        
-        self.includefilethread.setfilelist(self.new_include_file_list)
+        self.includefilethread.setfilelist(new_include_file_list)       
         self.includefilethread.run()
         self.thread_finished()
-
-        
-        ##There can be three cases, either there can be global functions in the file
-        ## or there can be function definitions of classes
-        ## or classes will be defined
-        ## But these three cases are valid for projects only
-        ## In a C++ File, there may be any combination of these three cases
-        ## So for file let us first find the class definition and then
-        ## find its functions definitions. Declaration of functions inside the
-        ## class declaration will be ignored.
-        ## Function definitions of classes outside the class declarations is extracted        
-        print "CPP CODE COMPLETION"
-        if self.filetype == 'C++ File':            
-            self.parent.func_array = []            
-            self.parent.combo_funcposarray=[]
-            self.includefileclassarray = []
+       
+        if self.filetype == 'C++ File' or self.filetype == 'C++ Project':
             self.parent.combo_class.clear()
-            #print re.findall(r'\bclass\b\s*(\w+.+?\}\s*\;)',text,re.DOTALL)
-            for class_search_iter in re.finditer(r'\bclass\b\s*(\w+.+?\}\s*\;)',text,re.DOTALL):
+            self.parent.func_array = [[]]      
+            self.parent.combo_funcposarray=[[]]
+            global_scope = CPPClass()
+            global_scope.name="Global Scope"            
+            self.curr_file_class_array=[global_scope]
+            self.curr_file_func_array = []
+            self.parent.combo_class.addItem(self.curr_file_class_array[0].name)            
+
+            ##Find all the class definitions and fill them in the array
+            for class_search_iter in re.finditer(r'[\btemplate\s*<class\s+\w+\s*>]*\bclass\b\s*\w+.+?\}\s*\;',text,re.DOTALL):
                 class_definition = class_search_iter.group()
-                class_name = ''
-                
-                if 'class' in class_definition:
-                    if '>' in class_definition:
-                        #class_definition = class_definition[class_definition.index('<')+1:]
-                        pass
-                    
-                    class_definition = class_definition[class_definition.index('class')+len('class'):]
-                    
-                    class_definition = class_definition.lstrip()
-                    class_name = ''
-                    for j in class_definition:
-                        if j == '\n' or j== '{' or j == ':' or j==' ':
-                            break
-                        else:
-                            class_name = class_name + j
-                    #print class_name
-                else:                    
-                    for j in class_definition:
-                        if j == '\n' or j== '{' or j == ':' or j==' ':
-                            break
-                        else:
-                            class_name = class_name + j
-                    
+
+                if class_definition.count('{')>class_definition.count('}'):
+                    regex_array = re.findall(r'(?<=\}\;)\s*\w+.+?(?=\}\;)',text,re.DOTALL)
+                    count = class_definition.count('{')-class_definition.count('}')
+                    i=0
+                    while count>0 and i<len(regex_array):
+                       class_definition += regex_array[i] + '};'
+                       count = class_definition.count('{')-class_definition.count('}')
+            
+                if 'template' in class_definition:
+                    class_definition = class_definition[class_definition.find('template'):]
+                else:
+                    class_definition = class_definition[class_definition.find('class'):]
+
+                text = text.replace(class_definition,'')
+
+                cpp_class = CPPClass()
+                cpp_class.createFromDeclaration(class_definition)
+                self.curr_file_class_array.append(cpp_class)
+
+            for _class in self.includefileclassarray+self.curr_file_class_array:
+                ###Member functions defined will be displayed
+                class_name = _class.name                
                 count = 0
-                
-                self.parent.combo_class.addItem(class_name)
-                self.includefileclassarray.append(class_name)
-                self.parent.combo_funcposarray.append([])
-                self.parent.func_array.append([])                
-                for search_iter in re.finditer(r'\b%s\s*::\s*(\w+.+)\s*{'%class_name,text):
-                             
+                for search_iter in re.finditer(r'\w+\s+%s::+.+\(.*\)\s*{'%(class_name),text):
+                    
                     d = search_iter.group()
                     if d.find('\n') != -1:
                         if d.find('{') > d.find('\n'):
@@ -646,51 +686,21 @@ class txtInputclass(QtGui.QTextEdit):
                             d = d[d.find('::')+2:d.find('{')]
                     else:
                         d = d[d.find('::')+2:d.find('{')]
-                        
-                    if "(" in d and ")" in d and "=" not in d:
-                        self.parent.func_array[len(self.parent.func_array)-1].append(d)
-                        self.parent.combo_funcposarray[len(self.parent.combo_funcposarray)-1].append(search_iter.start())
-                    count +=1
-                    contains_class_functions = True          
 
-        ####For files in C++ Project
-        if self.filetype == 'C++ Project':
-            self.parent.func_array = []
-            self.parent.combo_funcposarray=[]
-            self.parent.combo_class.clear()
-            contains_class_functions = False
-            print self.includefileclassarray
-            for i in range(len(self.includefileclassarray)):
-                count = 0
-                if self.includefileclassarray[i].find(')')!=-1:
-                    continue
-                if self.includefileclassarray[i].find('(')!=-1:
-                    continue
-                regex_arrW = re.findall(r'\b%s::\s*(\w\(*.*\))\s*{'%self.includefileclassarray[i],text)
-                if regex_arrW!=[] or re.findall(r'\b%s::%s\(*.*\)'%(self.includefileclassarray[i],self.includefileclassarray[i]),text)!=[]:
-                    #print regex_arrW
-                    print "adding"+self.includefileclassarray[i]
-                    self.parent.combo_class.addItem(self.includefileclassarray[i])
-                    self.parent.combo_funcposarray.append([])
-                    self.parent.func_array.append([])
-                for search_iter in re.finditer(r'\b%s::\s*(\w\(*.*\))\s*{'%self.includefileclassarray[i],text):
-                    #if count == 0:
-                        #self.parent.combo_class.addItem(self.includefileclassarray[i])
-                        #self.parent.combo_funcposarray.append([])
-                        #self.parent.func_array.append([])
-                    d = search_iter.group()
-                    d = re.findall(r'::\s*(\w+.+)\s*{',d)[0]                    
-                    d = d.strip()
-                    if re.findall(r'(\w+.+)\s*\(',d) !=[] and self.includefileclassarray[i]==re.findall(r'(\w+.+)\s*\(',d)[0]:
+                    if d.count('(')>1:
                         continue
-                        
+                    
                     if "(" in d and ")" in d and "=" not in d:
+                        if count ==0:
+                            self.parent.combo_class.addItem(class_name)
+                            self.parent.combo_funcposarray.append([])
+                            self.parent.func_array.append([])
                         self.parent.func_array[len(self.parent.func_array)-1].append(d)
                         self.parent.combo_funcposarray[len(self.parent.combo_funcposarray)-1].append(search_iter.start())
-                    count +=1
-                    contains_class_functions = True
+                        count +=1                
+                
                 ##For constructor
-                for search_iter in re.finditer(r'\b%s::%s\(*.*\)'%(self.includefileclassarray[i],self.includefileclassarray[i]),text):
+                for search_iter in re.finditer(r'\b%s::%s\(.*\)'%(class_name,class_name),text):
                     d = search_iter.group()
                     d = d[d.index('::')+2:]
                     d=d.strip()
@@ -702,7 +712,7 @@ class txtInputclass(QtGui.QTextEdit):
                     self.parent.combo_funcposarray[len(self.parent.combo_funcposarray)-1].insert(k,search_iter.start())
                     self.parent.func_array[len(self.parent.combo_funcposarray)-1].insert(k,d)
                 #For Destructor
-                for search_iter in re.finditer(r'\b%s::~%s\(\)'%(self.includefileclassarray[i],self.includefileclassarray[i]),text):
+                for search_iter in re.finditer(r'\b%s::~%s\(\)'%(class_name,class_name),text):
                     d = search_iter.group()
                     d = d[d.index('::')+2:]                    
                     d=d.strip()
@@ -712,218 +722,35 @@ class txtInputclass(QtGui.QTextEdit):
                             k=j                            
                             break
                     self.parent.combo_funcposarray[len(self.parent.combo_funcposarray)-1].insert(k,search_iter.start())
-                    self.parent.func_array[len(self.parent.combo_funcposarray)-1].insert(k,d)
-                    contains_class_functions = True
+                    self.parent.func_array[len(self.parent.combo_funcposarray)-1].insert(k,d)            
+                    
+            ##For Global functions       
+            for search_iter in re.finditer(r'[\w*]+[\s*]+[\w*]+\(+.*\)\s*{',text):                
+                d = search_iter.group()                
+                d = d[:d.rfind('{')]
+                d = d.strip()
                 
-                
-                #print self.parent.func_array
-                #print self.parent.combo_funcposarray
-            #print self.parent.combo_funcposarray
-            #print self.parent.func_array
-            ##########################################
-            count = 0
-            ####For file containing class definition
-            if contains_class_functions==False:
-                self.contains_class_definitions = False
-                ##Here no substring found could be removed, because it will change the
-                ##position so I thought of replacing the sub string with the same length
-                ##of a string containing only spaces.
-                for class_search_iter in re.finditer(r'\bclass\b\s*(\w+.+?\}\s*\;)',text,re.DOTALL):
-                    self.contains_class_definitions = True
-                    class_definition = class_search_iter.group()
-                    
-                    self.parent.func_array.append([])
-                    self.parent.combo_funcposarray.append([])
-                    #print class_definition
-                    
-                    if 'class' in class_definition:                        
-                        
-                        class_definition = class_definition.replace('class','    ',1)
-                        if re.findall(r'>\s*\bclass\b\s*\w+',class_definition)!=[]:
-                        
-                            class_definition = class_definition.replace('>',' ',1)
-                            ###code to complete the class definition containing enum, class or struct
-                            count = len(re.findall(r'\benum\b',class_definition)) + len(re.findall(r'\bclass\b',class_definition)) + len(re.findall(r'\bstruct\b',class_definition))
-                            count -= len(re.findall(r'\}\s*;',class_definition))
-                            i=0
-                            while(count>0):
-                                class_definition += re.findall(r'(?<=\}\;)\s*\w+.+?(?=\}\;)',text,re.DOTALL)[i]+'};'
-                                count = len(re.findall(r'\benum\b',class_definition)) + len(re.findall(r'\bclass\b',class_definition)) + len(re.findall(r'\bstruct\b',class_definition))
-                                count -= len(re.findall(r'\}\s*;',class_definition))                            
-                                i+=1
-                            class_name = re.findall(r'\bclass\b\s*(\w+)',class_definition)[0]                        
-                        else:
-                            ###code to complete the class definition containing enum, class or struct
-                            count = len(re.findall(r'\benum\b',class_definition)) + len(re.findall(r'\bclass\b',class_definition)) + len(re.findall(r'\bstruct\b',class_definition))
-                            count -= len(re.findall(r'\}\s*;',class_definition))
-                            i=0
-                            while(count>0):
-                                class_definition += re.findall(r'(?<=\}\;)\s*\w+.+?(?=\}\;)',text,re.DOTALL)[i]+'};'
-                                count = len(re.findall(r'\benum\b',class_definition)) + len(re.findall(r'\bclass\b',class_definition)) + len(re.findall(r'\bstruct\b',class_definition))
-                                count -= len(re.findall(r'\}\s*;',class_definition))                            
-                                i+=1 
-                            class_name = re.findall(r'\s*(\w+)',class_definition)[0]
-                    else:
-                        class_name = ''
-                        for j in class_definition:
-                            if j == '\n' or j== '{' or j == ':' or j==' ':
-                                break
-                            else:
-                                class_name = class_name + j
-                    self.parent.combo_class.addItem(class_name)
-
-                    class_definition = class_definition.replace('{',' ',1)
-                    ##Converting all class,enums and structs definitions to spaces
-                    class_definition_new = ""
-                    end=0
-                    for search_iter in re.finditer(r'\bclass\b\s*(\w+.+?\}\s*\;)',class_definition,re.DOTALL):
-                        i=search_iter.start()
-                        s=''
-                        while i<search_iter.end():
-                            s +=' '
-                            i+=1                        
-                        class_definition_new+=class_definition[end:search_iter.start()] + s
-                        end=search_iter.end()
-                    class_definition_new+=class_definition[end:]                
-                    class_definition = class_definition_new
-                    
-                    class_definition_new = ""
-                    end=0
-                    for search_iter in re.finditer(r'\benum\b(.+?\}\s*\;)',class_definition,re.DOTALL):
-                        i=search_iter.start()
-                        s=''
-                        while i<search_iter.end():
-                            s +=' '
-                            i+=1
-                        class_definition_new+=class_definition[end:search_iter.start()]
-                        end=search_iter.end()
-                    class_definition_new+=class_definition[end:]
-                    class_definition = class_definition_new                    
-
-                    class_definition_new = ""
-                    end=0
-                    for search_iter in re.finditer(r'\bstruct\b\s*(\w+.+?\}\s*\;)',class_definition,re.DOTALL):
-                        i=search_iter.start()
-                        s=''
-                        while i<search_iter.end():
-                            s +=' '
-                            i+=1
-                        class_definition_new+=class_definition[end:search_iter.start()]
-                        end=search_iter.end()
-                    class_definition_new+=class_definition[end:]
-                    class_definition = class_definition_new
-
-                    ##Converting all inline functions body to whitespaces and inserting
-                    ##a ; after all functions
-                    ##This code has to be changed to work according to as defined
-                    inline_function=""
-                    bracket_array=[('{',i.start()) for i in re.finditer(r'\{',class_definition)]
-                    bracket_array+=[('}',j.start()) for j in re.finditer(r'\}',class_definition)]                    
-                    
-                    for i in range(len(bracket_array)):
-                        for k in range(len(bracket_array)-1):
-                            if bracket_array[k][1]>bracket_array[k+1][1]:
-                                o=bracket_array[k+1]
-                                bracket_array[k+1]=bracket_array[k]
-                                bracket_array[k]=o                    
-                    class_definition_new=""
-                    n=0
-                    for search_iter in re.finditer(r'\s*(\w+.+)\s*\{',class_definition):
-                        inline_function = search_iter.group()
-                        class_definition_new += class_definition[n:search_iter.end()-1]+';'
-                        if inline_function.find('{')!=-1:
-                            inline_function = inline_function[:inline_function.find('{')]
-                        count = 0
-                        for j,i in enumerate(bracket_array):
-                            if i[0]=='{':
-                                count +=1
-                            else:
-                                count -=1
-                            if count ==0:
-                                break
-                        n=bracket_array[j][1]+1
-                        a=bracket_array[0][1]
-                        s=''
-                        while a<n:
-                            s +=' '
-                            a+=1
-                        class_definition_new += s
-                        bracket_array = bracket_array[j+1:]
-                    if bracket_array !=[]:
-                        class_definition_new +=class_definition[n:bracket_array[len(bracket_array)-1][1]]
-                    else:
-                        class_definition_new+=class_definition[n:]
-                    class_definition = class_definition_new                   
-                  
-                    ##Finding out all the members
-                    for search_iter in re.finditer(r'\s+(.+\w+.+)\s*?\;',class_definition):
-                        d = search_iter.group()                            
-                        add = False
-                        if "(" in d and ")" in d and "=" not in d:
-                            add = True
-                            index_open_bracket = d.rfind('(')
-                            space_rindex = 0
-                            if ' ' in d:                                        
-                                can_break = False
-                                for space_rindex in range(index_open_bracket+1,0,-1):
-                                    if d[space_rindex].isalnum() or d[space_rindex] == '_':
-                                        can_break = True
-                                    else:
-                                        if d[space_rindex].isspace() and can_break == True:
-                                            break                                
-                            
-                        if "(" not in d and ")" not in d:
-                            if '=' in d:
-                                add = True
-                                equals_index = d.rfind('=')
-                                can_break = False
-                                for space_rindex in range(equals_index,0,-1):
-                                    if d[space_rindex].isalnum() or d[space_rindex] == '_':
-                                        can_break = True
-                                    else:
-                                        if d[space_rindex].isspace() and can_break == True:
-                                            break                                    
-                            else:
-                                add = True
-                                space_rindex = d.rfind(' ')
-                                    
-                        if add == True:
-                            count =1
-                            if '=' in d:
-                                self.parent.func_array[len(self.parent.func_array)-1].append(d[0:space_rindex].rstrip() + ' ' +d[space_rindex:equals_index-1].lstrip())
-                            else:
-                                self.parent.func_array[len(self.parent.func_array)-1].append(((d.rstrip()).lstrip()).replace('\n',''))
-                            self.parent.combo_funcposarray[len(self.parent.combo_funcposarray)-1].append(search_iter.end()+class_search_iter.start()-len(class_name))
-                            
-            ##For file containing only global functions
-            if contains_class_functions == False and count ==0:
-                for i in self.datatypearray:                    
-                    for search_iter in re.finditer(r'\b%s\b\s*(\w+.+)\s*{'%i,text):
-                        if count == 0:
-                            self.parent.hbox_combo.removeWidget(self.parent.combo_class)
-                        d = search_iter.group()    
-                        d = d[d.find(i)+len(i)+1:d.rfind('\n')]            
-                        if "(" in d and ")" in d and "=" not in d:                                
-                                self.parent.combo_funcposarray.append(search_iter.start())
-                                self.parent.combo_func.addItem(i+" "+d)
-                        count = 1
+                if "(" in d and ")" in d and "=" not in d and '::' not in d: 
+                    func = CFunction()
+                    func.createFromDeclaration(d)
+                    self.curr_file_class_array[0].list_public_members.append(func)
+                    self.parent.combo_funcposarray[0].append(search_iter.start())
+                    self.parent.func_array[0].append(func.getDeclaration())
+            
             ############################################
-        ###For getting created objects
-        object_array = []
-        class_array = []
-        
-        for class_name in self.includefileclassarray+[str(self.parent.combo_class.itemText(i)) for i in range(self.parent.combo_class.count())]:
-            if class_name.find(')')!=-1:
-                continue
-            if class_name.find('(')!=-1:
-                continue
-            #print class_name
-            for object_name in re.findall(r'\b%s\b\s*(\w+.+)\s*?\;'%class_name,text):
-                for j in object_name.split(','):
-                    object_array.append(j)
-                    class_array.append(class_name)
-        self.object_classarray = class_array
-        self.object_namearray = object_array
+            ###Linking base classes with child classes
+            for _class in (self.includefileclassarray + self.curr_file_class_array):
+                for __class in (self.includefileclassarray + self.curr_file_class_array):
+                    for base_class_name in _class.list_public_base_classes_name:
+                        if base_class_name == __class.name:
+                            _class.list_public_base_classes.append(__class)
+                    for base_class_name in _class.list_private_base_classes_name:
+                        if base_class_name == __class.name:
+                            _class.list_private_base_classes.append(__class)                    
+
+            ##Link gtkmm classes here
+                            
+        ##For getting created objects in class definition
         try:
             self.document().contentsChange.disconnect(self.document_contents_change)
         except:
@@ -935,8 +762,10 @@ class txtInputclass(QtGui.QTextEdit):
         cc = self.textCursor()
         cc.select(QTextCursor.WordUnderCursor)
         cc.removeSelectedText()
-        text = str(item.text())
+        text = str(item.text())        
+        
         if "(" in text and ")" in text and "=" not in text:
+            self.tooltip_stack.insert(0,text)
             add = True
             index_open_bracket = text.rfind('(')
             space_rindex = 0
@@ -962,6 +791,8 @@ class txtInputclass(QtGui.QTextEdit):
             else:
                 add = True
                 space_rindex = text.rfind(' ')
+                if space_rindex == -1:
+                    space_rindex = 0
         self.insertPlainText(text[space_rindex:].lstrip())
         self.funcmatchlist.setVisible(False)        
 
@@ -1102,132 +933,136 @@ class txtInputclass(QtGui.QTextEdit):
                     else:
                         cc.setPosition(lineposition+int(float(currentposition-lineposition)/float(len(self.indentwidth)))*len(self.indentwidth)+1,QTextCursor.MoveAnchor)
                     self.setTextCursor(cc)
-                                          
-        if self.indentTF == 'True':
-            if event.key() == 16777220 and indentct>=0:
+
+        if self.indentTF == 'True' or self.indentTF==True:
+            if (event.key() == QtCore.Qt.Key_Return or event.key() == QtCore.Qt.Key_Enter)and indentct>=0:
+                
                 cc = self.textCursor()
+                if self.funcmatchlist.isVisible()==True:                    
+                    self.funcmatchlistdoubleclicked(self.funcmatchlist.item(0))
+                    return
                 #cc.movePosition(QTextCursor.EndOfLine, QTextCursor.MoveAnchor)
                 cc.movePosition(QTextCursor.StartOfLine,QTextCursor.KeepAnchor)
                 line = str(cc.selectedText())                
-                try:                    
-                    if self.filetype == 'C Project' or self.filetype == 'C File':
-                        ##To add functions when enter key is pressed to func array
-                        line = line + ' '
-                        for i in self.datatypearray:
-                            for search_iter in re.finditer(r'\b%s\b\s*(\w+.+)'%i,line):
-                                d = search_iter.group()
-                                d = d[d.find(i)+len(i)+1:d.rfind('\n')]                            
-                                if "(" in d and ")" in d:
-                                    if "=" not in d and ";" not in d:
-                                        if d not in self.includefilefuncarray:                                       
-                                            self.includefilefuncarray.insert(self.parent.combo_func.currentIndex()+1,d)
-                                            self.includefiledatatypearray.insert(self.parent.combo_func.currentIndex()+1,i)
-                                            self.parent.combo_funcposarray.insert(self.parent.combo_func.currentIndex()+1,cc.position())
-                                            self.parent.combo_func.insertItem(self.parent.combo_func.currentIndex()+1,i+" "+d)
-                        line = line[:len(line)-1]
-                    else:
-                        #####Code to add functions and classes, when they are added
-                        scope_resolution_operator_found = False
-                        if self.parent.combo_class.count() == 0:
-                            line = line + ' '
-                            for i in self.datatypearray:
-                                for search_iter in re.finditer(r'\b%s\b\s*(\w+.+)'%i,line):                                
-                                    d = search_iter.group()
-                                    d = d[d.find(i)+len(i)+1:d.rfind('\n')]                                
-                                    if "(" in d and ")" in d:
-                                        if "=" not in d and ";" not in d:
-                                            if d not in self.includefilefuncarray:
-                                                self.includefilefuncarray.insert(self.parent.combo_func.currentIndex()+1,d)
-                                                self.includefiledatatypearray.insert(self.parent.combo_func.currentIndex()+1,i)
-                                                self.parent.combo_funcposarray.insert(self.parent.combo_func.currentIndex()+1,cc.position())
-                                                self.parent.combo_func.insertItem(self.parent.combo_func.currentIndex()+1,i+" "+d)
-                            line = line[:len(line)-1]
-                        else:
-                            combo_class_current_index = self.parent.combo_class.currentIndex()
-                            combo_class_current_text = str(self.parent.combo_class.itemText(combo_class_current_index))                        
-                            for search_iter in re.finditer(r'\b%s::\s*(\w+.+)\s*'%str(self.parent.combo_class.itemText(combo_class_current_index)),line):
-                                d = search_iter.group()
-                                
-                                if "(" in d and ")" in d and "=" not in d and ";" not in d:
-                                        scope_resolution_operator_found = True
-                                        func = d[d.find(combo_class_current_text)+len(combo_class_current_text)+len('::'):]
-                                        for i in range(self.parent.combo_func.count()):
-                                            if d == self.parent.combo_func.itemText(i):
-                                                break
-                                        if i != self.parent.combo_func.count():                                        
-                                            self.parent.combo_funcposarray[combo_class_current_index].insert(self.parent.combo_func.currentIndex()+1,cc.position())                                    
-                                            self.parent.combo_func.insertItem(self.parent.combo_func.currentIndex()+1,func)
-                            ######If file contains class definition#####
-                            if self.filetype == 'C++ Project' and '.h' in self.parent.filename:                            
-                                for search_iter in re.finditer(r'\s+(.+\w+.+)?\;',line):
-                                    d = search_iter.group()                                                                       
-                                    add = False
-                                    if "(" in d and ")" in d and "=" not in d:
-                                        add = True
-                                        index_open_bracket = d.rfind('(')
-                                        space_rindex = 0
-                                        if ' ' in d:                                        
-                                            can_break = False
-                                            for space_rindex in range(index_open_bracket+1,0,-1):
-                                                if d[space_rindex].isalnum() or d[space_rindex] == '_':
-                                                    can_break = True
-                                                else:
-                                                    if d[space_rindex].isspace() and can_break == True:
-                                                        break                                
-                                        
-                                    if "(" not in d and ")" not in d:
-                                        if '=' in d:
-                                            add = True
-                                            equals_index = d.rfind('=')
-                                            can_break = False
-                                            for space_rindex in range(equals_index,0,-1):
-                                                if d[space_rindex].isalnum() or d[space_rindex] == '_':
-                                                    can_break = True
-                                                else:
-                                                    if d[space_rindex].isspace() and can_break == True:
-                                                        break                                    
-                                        else:
-                                            add = True
-                                            space_rindex = d.rfind(' ')
-                                                
-                                    if add == True:
-                                        count =1
-                                        if '=' in d:
-                                            self.parent.func_array[combo_class_current_index].insert(self.parent.combo_func.currentIndex()+1,d[0:space_rindex].rstrip() + ' ' +d[space_rindex:equals_index-1].lstrip())
-                                            self.parent.combo_func.insertItem(self.parent.combo_func.currentIndex()+1,d[0:space_rindex].rstrip() + ' ' +d[space_rindex:equals_index-1].lstrip())
-                                        else:
-                                            self.parent.func_array[combo_class_current_index].insert(self.parent.combo_func.currentIndex()+1,(d.rstrip()).lstrip())
-                                            self.parent.combo_func.insertItem(self.parent.combo_func.currentIndex()+1,(d.rstrip()).lstrip())
-                                        self.parent.combo_funcposarray[combo_class_current_index].insert(self.parent.combo_func.currentIndex()+1,cc.position())                                
-                                ##########################################################################
-                    
-                        if scope_resolution_operator_found == False:                            
-                            ##Match classnames and add object names                        
-                            for i in self.includefileclassarray:
-                                if i in line:
-                                    try:
-                                        p = re.findall(r'\b%s\b\s*(\w+.?\;)'%i,line,re.DOTALL)[0] ##reg exp for finding only one object name, if there are more than one then except block will be called
-                                        if ';' in p:
-                                           object_array = [p[0:len(p)-1]]
-                                        else:
-                                           object_array = p.split(',')
-                                    except IndexError :
-                                        object_array = re.findall(r'\b%s\b\s*(\w+.+)?\;'%i,line,re.DOTALL)[0].split(',') #reg exp for finding more than one object name
-                                               
-                                    for j in object_array:
-                                        try:
-                                            index = self.object_namearray.index(j)
-                                            #print index
-                                            if i != self.object_classarray[index]:
-                                                self.object_classarray[index] = i
-                                        except:
-                                            self.object_namearray.append(j)
-                                            self.object_classarray.append(i)                        
-                            #print self.object_namearray
-                            #print self.object_classarray
-                            ##################################################
-                except:
-                    pass
+##                try:                    
+##                    if self.filetype == 'C Project' or self.filetype == 'C File':
+##                        ##To add functions when enter key is pressed to func array
+##                        line = line + ' '
+##                        for i in self.datatypearray:
+##                            for search_iter in re.finditer(r'\b%s\b\s*(\w+.+)'%i,line):
+##                                d = search_iter.group()
+##                                d = d[d.find(i)+len(i)+1:d.rfind('\n')]                            
+##                                if "(" in d and ")" in d:
+##                                    if "=" not in d and ";" not in d:
+##                                        if d not in self.includefilefuncarray:                                       
+##                                            self.includefilefuncarray.insert(self.parent.combo_func.currentIndex()+1,d)
+##                                            self.includefiledatatypearray.insert(self.parent.combo_func.currentIndex()+1,i)
+##                                            self.parent.combo_funcposarray.insert(self.parent.combo_func.currentIndex()+1,cc.position())
+##                                            self.parent.combo_func.insertItem(self.parent.combo_func.currentIndex()+1,i+" "+d)
+##                        line = line[:len(line)-1]
+##                    else:
+##                        #####Code to add functions and classes, when they are added
+##                        scope_resolution_operator_found = False
+##                        if self.parent.combo_class.count() == 0:
+##                            line = line + ' '
+##                            for i in self.datatypearray:
+##                                for search_iter in re.finditer(r'\b%s\b\s*(\w+.+)'%i,line):                                
+##                                    d = search_iter.group()
+##                                    d = d[d.find(i)+len(i)+1:d.rfind('\n')]                                
+##                                    if "(" in d and ")" in d:
+##                                        if "=" not in d and ";" not in d:
+##                                            if d not in self.includefilefuncarray:
+##                                                self.includefilefuncarray.insert(self.parent.combo_func.currentIndex()+1,d)
+##                                                self.includefiledatatypearray.insert(self.parent.combo_func.currentIndex()+1,i)
+##                                                self.parent.combo_funcposarray.insert(self.parent.combo_func.currentIndex()+1,cc.position())
+##                                                self.parent.combo_func.insertItem(self.parent.combo_func.currentIndex()+1,i+" "+d)
+##                            line = line[:len(line)-1]
+##                        else:
+##                            combo_class_current_index = self.parent.combo_class.currentIndex()
+##                            combo_class_current_text = str(self.parent.combo_class.itemText(combo_class_current_index))                        
+##                            for search_iter in re.finditer(r'\b%s::\s*(\w+.+)\s*'%str(self.parent.combo_class.itemText(combo_class_current_index)),line):
+##                                d = search_iter.group()
+##                                
+##                                if "(" in d and ")" in d and "=" not in d and ";" not in d:
+##                                        scope_resolution_operator_found = True
+##                                        func = d[d.find(combo_class_current_text)+len(combo_class_current_text)+len('::'):]
+##                                        for i in range(self.parent.combo_func.count()):
+##                                            if d == self.parent.combo_func.itemText(i):
+##                                                break
+##                                        if i != self.parent.combo_func.count():                                        
+##                                            self.parent.combo_funcposarray[combo_class_current_index].insert(self.parent.combo_func.currentIndex()+1,cc.position())                                    
+##                                            self.parent.combo_func.insertItem(self.parent.combo_func.currentIndex()+1,func)
+##                            ######If file contains class definition#####
+##                            if self.filetype == 'C++ Project' and '.h' in self.parent.filename:                            
+##                                for search_iter in re.finditer(r'\s+(.+\w+.+)?\;',line):
+##                                    d = search_iter.group()                                                                       
+##                                    add = False
+##                                    if "(" in d and ")" in d and "=" not in d:
+##                                        add = True
+##                                        index_open_bracket = d.rfind('(')
+##                                        space_rindex = 0
+##                                        if ' ' in d:                                        
+##                                            can_break = False
+##                                            for space_rindex in range(index_open_bracket+1,0,-1):
+##                                                if d[space_rindex].isalnum() or d[space_rindex] == '_':
+##                                                    can_break = True
+##                                                else:
+##                                                    if d[space_rindex].isspace() and can_break == True:
+##                                                        break                                
+##                                        
+##                                    if "(" not in d and ")" not in d:
+##                                        if '=' in d:
+##                                            add = True
+##                                            equals_index = d.rfind('=')
+##                                            can_break = False
+##                                            for space_rindex in range(equals_index,0,-1):
+##                                                if d[space_rindex].isalnum() or d[space_rindex] == '_':
+##                                                    can_break = True
+##                                                else:
+##                                                    if d[space_rindex].isspace() and can_break == True:
+##                                                        break                                    
+##                                        else:
+##                                            add = True
+##                                            space_rindex = d.rfind(' ')
+##                                                
+##                                    if add == True:
+##                                        count =1
+##                                        if '=' in d:
+##                                            self.parent.func_array[combo_class_current_index].insert(self.parent.combo_func.currentIndex()+1,d[0:space_rindex].rstrip() + ' ' +d[space_rindex:equals_index-1].lstrip())
+##                                            self.parent.combo_func.insertItem(self.parent.combo_func.currentIndex()+1,d[0:space_rindex].rstrip() + ' ' +d[space_rindex:equals_index-1].lstrip())
+##                                        else:
+##                                            self.parent.func_array[combo_class_current_index].insert(self.parent.combo_func.currentIndex()+1,(d.rstrip()).lstrip())
+##                                            self.parent.combo_func.insertItem(self.parent.combo_func.currentIndex()+1,(d.rstrip()).lstrip())
+##                                        self.parent.combo_funcposarray[combo_class_current_index].insert(self.parent.combo_func.currentIndex()+1,cc.position())                                
+##                                ##########################################################################
+##                    
+##                        if scope_resolution_operator_found == False:                            
+##                            ##Match classnames and add object names                        
+##                            for i in self.includefileclassarray:
+##                                if i in line:
+##                                    try:
+##                                        p = re.findall(r'\b%s\b\s*(\w+.?\;)'%i,line,re.DOTALL)[0] ##reg exp for finding only one object name, if there are more than one then except block will be called
+##                                        if ';' in p:
+##                                           object_array = [p[0:len(p)-1]]
+##                                        else:
+##                                           object_array = p.split(',')
+##                                    except IndexError :
+##                                        object_array = re.findall(r'\b%s\b\s*(\w+.+)?\;'%i,line,re.DOTALL)[0].split(',') #reg exp for finding more than one object name
+##                                               
+##                                    for j in object_array:
+##                                        try:
+##                                            index = self.object_namearray.index(j)
+##                                            #print index
+##                                            if i != self.object_classarray[index]:
+##                                                self.object_classarray[index] = i
+##                                        except:
+##                                            self.object_namearray.append(j)
+##                                            self.object_classarray.append(i)                        
+##                            #print self.object_namearray
+##                            #print self.object_classarray
+##                            ##################################################
+##                except:
+##                    pass
                 if line == '':
                     cc.movePosition(QTextCursor.EndOfLine, QTextCursor.MoveAnchor)
                     cc.movePosition(QTextCursor.StartOfLine,QTextCursor.KeepAnchor)
@@ -1308,7 +1143,7 @@ class txtInputclass(QtGui.QTextEdit):
         else:
             QtGui.QTextEdit.keyPressEvent(self,event)
 
-        if event.key() == 16777232: #Home key has 16777232
+        if event.key() == QtCore.Qt.Key_Home: #Home key has 16777232
             cc = self.textCursor()   
             cc.select(QTextCursor.LineUnderCursor)
             line = cc.selectedText()
@@ -1330,77 +1165,18 @@ class txtInputclass(QtGui.QTextEdit):
             self.setTextCursor(cc)
             
         if self.showtooltip == True:
-            
-            if self.tooltip_func_index !=-1 and self.tooltip_class_index == -1:
-                
-                x1,y1,x2,y2 = self.cursorRect().getCoords()
-                self.tooltip_x = self.mapToGlobal(QtCore.QPoint(x2,y2)).x()
-                self.tooltip_y = self.mapToGlobal(QtCore.QPoint(x2,y2)).y()
-                QtGui.QToolTip.showText(QtCore.QPoint(self.tooltip_x,self.tooltip_y),self.includefilefuncarray[self.tooltip_func_index],self)
-
-            if self.tooltip_func_index !=-1 and self.tooltip_class_index != -1:
-
-                x1,y1,x2,y2 = self.cursorRect().getCoords()
-                self.tooltip_x = self.mapToGlobal(QtCore.QPoint(x2,y2)).x()
-                self.tooltip_y = self.mapToGlobal(QtCore.QPoint(x2,y2)).y()
-                QtGui.QToolTip.showText(QtCore.QPoint(self.tooltip_x,self.tooltip_y),self.includefilefuncarray[self.tooltip_class_index][self.tooltip_func_index],self)
+            x1,y1,x2,y2 = self.cursorRect().getCoords()
+            self.tooltip_x = self.mapToGlobal(QtCore.QPoint(x2,y2)).x()
+            self.tooltip_y = self.mapToGlobal(QtCore.QPoint(x2,y2)).y()
+            QtGui.QToolTip.showText(QtCore.QPoint(self.tooltip_x,self.tooltip_y),self.tooltip_stack[0],self)
             
         if event.key() == 40: #40 is for (
             cc = self.textCursor()
             cc.movePosition(cc.PreviousWord,cc.KeepAnchor,2)
-            selected_text = str(cc.selectedText())
+            selected_text = str(cc.selectedText())            
             
-            if self.filetype == 'C Project' or self.filetype == 'C File':
-                
-                for i in range(len(self.includefilefuncarray)+1):
-                    try:
-                        if selected_text == self.includefilefuncarray[i][0:len(selected_text)]:
-                            break
-                    except:
-                        pass
-                if i!= len(self.includefilefuncarray):
-                    self.tooltip_func_index = i
-                    self.tooltip_class_index = -1
-                    self.showtooltip = True
-            else:
-                if self.filetype == 'C++ Project' or self.filetype == 'C++ File':
-                    
-                    cc.movePosition(cc.PreviousWord,cc.KeepAnchor,2)
-                    selected_text = unicode(cc.selectedText(),'utf-8')
-                    dot_index = selected_text.find('.')                    
-                    if dot_index !=-1:
-                        object_name = selected_text[:dot_index]
-                        func_name = selected_text[dot_index+1:]
-                        index_object = self.object_namearray.index(object_name)            
-                        matched_class = self.object_classarray[index_object]
-                        index_class = self.includefileclassarray.index(matched_class)
-                        for i in range(len(self.includefilefuncarray[index_class])+1):
-                            try:
-                                if self.includefilefuncarray[index_class][i].find(func_name)!=-1:
-                                    break
-                            except:
-                                pass
-                        if i!= len(self.includefilefuncarray[index_class]):
-                            self.tooltip_func_index = i
-                            self.tooltip_class_index = index_class
-                            self.showtooltip = True
-                    else:
-                        scope_resolution_index = selected_text.find('::')
-                        if scope_resolution_index != -1:
-                            class_name = selected_text[:scope_resolution_index]
-                            func_name = selected_text[scope_resolution_index+2:]                                                    
-                            index_class = self.includefileclassarray.index(class_name)
-                            
-                            for i in range(len(self.includefilefuncarray[index_class])+1):
-                                try:
-                                    if self.includefilefuncarray[index_class][i].find(func_name)!=-1:
-                                        break
-                                except:
-                                    pass
-                            if i!= len(self.includefilefuncarray[index_class]):
-                                self.tooltip_func_index = i
-                                self.tooltip_class_index = index_class
-                                self.showtooltip = True
+            if len(self.tooltip_stack)!=0:                    
+                self.showtooltip = True            
          
         if event.key() == 41: ##41 is for )
             cc = self.textCursor()
@@ -1443,10 +1219,14 @@ class txtInputclass(QtGui.QTextEdit):
                     cc.movePosition(QTextCursor.NextCharacter,QTextCursor.MoveAnchor,indexopenbracket)
                     cc.movePosition(cc.PreviousWord,cc.KeepAnchor)
                     selected_text = cc.selectedText()
-                    
-                    if str(QtGui.QToolTip.text()).find(selected_text+'(') == 0:
+
+                    if self.showtooltip==True:
+                        self.tooltip_stack.pop(0)
+                        
+                    if len(self.tooltip_stack) == 0:
                         QtGui.QToolTip.hideText()
                         self.showtooltip = False
+                        
                     cc.movePosition(QTextCursor.StartOfLine,QTextCursor.MoveAnchor)
                     cc.movePosition(QTextCursor.NextCharacter,QTextCursor.MoveAnchor,indexopenbracket)
                     cc.movePosition(QTextCursor.NextCharacter,QTextCursor.KeepAnchor,pos-indexopenbracket)
@@ -1495,271 +1275,162 @@ class txtInputclass(QtGui.QTextEdit):
                     cc.movePosition(QTextCursor.NextCharacter,QTextCursor.KeepAnchor,pos-indexopenbigbracket)
                     self.setTextCursor(cc)
                     self.removeselectedtext = False
+                    
         ##Show a list of all the matches for the object or function or class
                     
-        if len(self.includefilefuncarray)!=0:            
-            if event.key() == 32 or event.key() == 16777217 or event.key() == 16777220: #for Tab,space and enter key
+        if len(self.includefileclassarray)!=0 or len(self.includefilefuncarray)!=0 or len(self.curr_file_func_array)!=0:
+            if event.key() == 32 or event.key() == 16777217 or event.key() == 16777250: #for Tab,space and enter key
                 self.funcmatchlist.setVisible(False)
-            else:            
-                cc = self.textCursor()
-                cc.select(QTextCursor.WordUnderCursor)
-                word = str(cc.selectedText())
-                self.funcmatchlist.setVisible(False)
-                self.funcmatchlist.clear()
-                
-                if len(word)>=2:
-                    if self.includefileclassarray == []: ##For C Project, C Files and C++ Files with only global functions, because they will not contain any classes
-                        for i in range(len(self.includefilefuncarray)):
-                            if word == self.includefilefuncarray[i][0:len(word)]:
-                                x1,y1,x2,y2 = self.cursorRect().getCoords()
-                                self.funcmatchlist.setGeometry(x2,y2,181,151)
-                                self.funcmatchlist.addItem(self.includefiledatatypearray[i] + " "+ self.includefilefuncarray[i])
-                                self.funcmatchlist.setVisible(True)
-                    else:      ##For C++ Projects and C++ Files
-                        for i in range(len(self.includefileclassarray)):
-                            if word == self.includefilefuncarray[i][0:len(word)]:
-                                x1,y1,x2,y2 = self.cursorRect().getCoords()
-                                self.funcmatchlist.setGeometry(x2,y2,181,151)
-                                self.funcmatchlist.addItem(includefileclassarray)
-                                self.funcmatchlist.setVisible(True)
-                        ### Don't forget to add scope rule for objects
-                        for i in range(len(self.object_namearray)):
-                            if word == self.object_namearray[i][0:len(word)]:
-                                x1,y1,x2,y2 = self.cursorRect().getCoords()
-                                self.funcmatchlist.setGeometry(x2,y2,181,151)
-                                self.funcmatchlist.addItem(self.object_namearray)
-                                self.funcmatchlist.setVisible(True)
-                cc.clearSelection()
+            else:
+                self.show_word_completion()
                 
         #If dot . is pressed then check whether there's an object and whether it is available
-        if event.key() == 46 and self.object_namearray !=[]:            
+        if event.key() == 46 and (self.list_objects !=[] or self.list_references !=[]):
             cc = self.textCursor()
             cc.movePosition(cc.WordLeft,cc.MoveAnchor,2)
             cc.select(QTextCursor.WordUnderCursor)
             word = cc.selectedText()
             try:
-                index_object = self.object_namearray.index(word)            
-                matched_class = self.object_classarray[index_object]
-                index_class = self.includefileclassarray.index(matched_class)
-                x1,y1,x2,y2 = self.cursorRect().getCoords()
-                self.funcmatchlist.setGeometry(x2,y2,181,151)
-                self.funcmatchlist.clear()
-                self.funcmatchlist.setVisible(True)                       
-                for i in range(len(self.includefilefuncarray[index_class])):
-                    self.funcmatchlist.addItem(self.includefiledatatypearray[index_class][i] + " "+ self.includefilefuncarray[index_class][i])
+                for _object in self.list_objects+self.list_references:
+                    if _object.name == word:                                                
+                        x1,y1,x2,y2 = self.cursorRect().getCoords()
+                        self.funcmatchlist.setGeometry(x2,y2,250,160)
+                        self.funcmatchlist.clear()
+                        self.funcmatchlist.setVisible(True)                        
+                        for _func in _object.class_type.getFullPublicList():                            
+                            self.funcmatchlist.addItem(_func)
             except:
                 pass
-            
-        #if scope resolution operator :: is inserted
-        
-        if event.key() == 58 and self.includefileclassarray !=[]:            
 
+        
+        if event.key() == 62 and self.list_pointers!=[]:
             cc = self.textCursor()
+            curr_pos = cc.position()
             cc.movePosition(cc.WordLeft,cc.KeepAnchor,1)
             cc.select(QTextCursor.WordUnderCursor)
+            if str(cc.selectedText())== '->':
+                cc.movePosition(cc.WordLeft,cc.KeepAnchor,2)
+                cc.select(QTextCursor.WordUnderCursor)
+                word = str(cc.selectedText())
+                try:
+                    for _object in self.list_pointers:
+                        if _object.name == word:                                                
+                            x1,y1,x2,y2 = self.cursorRect().getCoords()
+                            self.funcmatchlist.setGeometry(x2,y2,250,160)
+                            self.funcmatchlist.clear()
+                            self.funcmatchlist.setVisible(True)                        
+                            for _func in _object.class_type.getFullPublicList():                            
+                                self.funcmatchlist.addItem(_func)
+                except:
+                    pass
+            
+        #if scope resolution operator :: is inserted        
+        if event.key() == 58 and self.includefileclassarray !=[]:
+            cc = self.textCursor()
+            curr_pos = cc.position()
+            cc.movePosition(cc.WordLeft,cc.KeepAnchor,1)
+            cc.select(QTextCursor.WordUnderCursor)
+            
             if str(cc.selectedText()) == '::':
+                cc.movePosition(cc.WordLeft,cc.KeepAnchor,2)
+                cc.select(QTextCursor.WordUnderCursor)
+                prev_word = str(cc.selectedText())
+                #print str(cc.selectedText())
                 cc.select(QTextCursor.LineUnderCursor)
                 line = cc.selectedText()
-                for j in range(len(self.includefileclassarray)):
-                    if self.includefileclassarray[j] in line:
-                        index_class = j
-                        x1,y1,x2,y2 = self.cursorRect().getCoords()
-                        self.funcmatchlist.setGeometry(x2,y2,181,151)
-                        self.funcmatchlist.clear()
-                        self.funcmatchlist.setVisible(True)                       
-                        for i in range(len(self.includefilefuncarray[index_class])):
-                            self.funcmatchlist.addItem(self.includefiledatatypearray[index_class][i] + " "+ self.includefilefuncarray[index_class][i])
+                
+                _class =None
+                for __class in self.includefileclassarray:
+                    
+                    if __class.name == prev_word:
+                        _class = __class
 
-class CodeRect(object):
+                for __class in self.curr_file_class_array:
+                    
+                    if __class.name == prev_word:
+                        _class = __class
 
-    def __init__(self,x1,y1,x2,y2,start_pos,end_pos):
+                if _class != None:
+                    x1,y1,x2,y2 = self.cursorRect().getCoords()
+                    self.funcmatchlist.setGeometry(x2,y2,250,160)
+                    self.funcmatchlist.clear()
+                    self.funcmatchlist.setVisible(True) 
+                    for func in _class.getFullList():    
+                        self.funcmatchlist.addItem(func)
+                        
+    def show_word_completion(self):
 
-        self.x1=x1
-        self.y1 = y1
-        self.x2=x2
-        self.y2=y2
-        self.start_pos = start_pos
-        self.end_pos = end_pos
-        super(CodeRect,self).__init__()
-
-    def is_point_inside(self,x,y):
-
-        if x > self.x1 and x < self.x2:
-            if y > self.y1 and y < self.y2:
-                return True
-        return False
+        cc = self.textCursor()
+        cc.select(QTextCursor.WordUnderCursor)
+        word = str(cc.selectedText())
+        self.funcmatchlist.setVisible(False)
+        self.funcmatchlist.clear()
         
-class codewidget(QtGui.QWidget):
+        if len(word)>=2:
+            if self.filetype == 'C Project' or self.filetype == 'C File': ##For C Project, C Files and C++ Files with only global functions, because they will not contain any classes                        
+                include_func_match_list = []
 
-    class NumberBar(QtGui.QWidget):
- 
-        def __init__(self, parent= None, *args):
-            
-            QtGui.QWidget.__init__(self, parent,*args)
-            self.edit = None            
-            self.highest_line = 0
-            self.rect_array = []
-            self.parent = parent
-            self.first_color = QtGui.QColor(0,0,0)
-            
-        def setTextEdit(self, edit):
-            
-            self.edit = edit
-            
-        def mouseReleaseEvent(self, mouse_event):
+                for i in range(len(self.includefilefuncarray)):                            
+                    if word == self.includefilefuncarray[i].name[0:len(word)]:
+                        include_func_match_list.append(self.includefilefuncarray[i].getDeclaration())
 
-            inside_rect_array=[]
-            
-            for i,x in enumerate(self.rect_array):                                
-                if x.is_point_inside(mouse_event.x(),mouse_event.y())==True:
-                    inside_rect_array.append(x)
+                for i in range(len(self.curr_file_func_array)):                            
+                    if word == self.curr_file_func_array[i].name[0:len(word)]:
+                        include_func_match_list.append(self.curr_file_func_array[i].getDeclaration())
+
+                for struct in self.includefileclassarray+self.curr_file_class_array:
+                    if word == struct.name[0:len(word)]:
+                        include_func_match_list.append(struct.getDeclaration())
+                    for typedef in struct.list_typedef:
+                        if word == typedef.name[0:len(word)]:
+                            include_func_match_list.append(typedef.name)
+
+                for _object in self.list_objects+self.list_references+self.list_pointers:
+                    if word == _object.name[0:len(word)]:                                
+                        x1,y1,x2,y2 = self.cursorRect().getCoords()
+                        self.funcmatchlist.setGeometry(x2,y2,250,160)                                
+                        self.funcmatchlist.setVisible(True)                                
+                        self.funcmatchlist.addItem(_object.getDeclaration())
+
+                if include_func_match_list!=[]:
+                    x1,y1,x2,y2 = self.cursorRect().getCoords()
+                    self.funcmatchlist.setGeometry(x2,y2,250,160)
+                    self.funcmatchlist.setVisible(True)
+                    for string in include_func_match_list:
+                        self.funcmatchlist.addItem(string)
                     
-            smallest_one = inside_rect_array[0]
-            min_height=inside_rect_array[0].y2-inside_rect_array[0].y1
-            for i,x in enumerate(inside_rect_array):
-                if min_height > x.y2-x.y1:
-                    print min_height
-                    min_height=x.y2-x.y1
-                    smallest_one = x
-            
-            self.edit.setTextVisible(smallest_one.start_pos,smallest_one.end_pos)           
-            QtGui.QWidget.mouseReleaseEvent(self,mouse_event)
-            
-        def update(self, *args):
-            
-            width = self.fontMetrics().width(str(self.highest_line)) + 7
-            if self.width() != width:
-                self.setFixedWidth(width)
-            QtGui.QWidget.update(self, *args)
- 
-        def paintEvent(self, event):
-            
-            contents_y = self.edit.verticalScrollBar().value()
-            page_bottom = contents_y + self.edit.viewport().height()
-            font_metrics = self.fontMetrics()
-            current_block = self.edit.document().findBlock(self.edit.textCursorWithHiddenText().position())
-            block_count = self.edit.document().blockCount()            
-            painter = QtGui.QPainter(self)
-
-            block = current_block
-            line_count_prev = block.blockNumber()+1            
+            else:                    
+                ##For C++ Projects and C++ Files
                 
-            while block.isValid():               
-                
-                position = self.edit.document().documentLayout().blockBoundingRect(block).topLeft()                            
-                if position.y() < contents_y:
-                    break                
-                block = block.previous()               
-                
-            if not block.isValid():
-                block = self.edit.document().findBlock(0)
-            line_count_next = block.blockNumber()
-            count = 0
-            drawLine = False
-            x1 = -1
-            y1 = -1
-            x2 = -1
-            y2 = -1
-            
-            begining_block= block
-            self.rect_array = []
-            self.added_array=[]
-            stack_point = []
-            stack_begining_block=[]
-            position = self.edit.document().documentLayout().blockBoundingRect(block).topLeft()
-            last_used_color = self.first_color
-            
-            while block.isValid() and position.y() <= page_bottom:
-                
-                line_count_next += 1                
-                position = self.edit.document().documentLayout().blockBoundingRect(block).topLeft()
-
-                if position.y() >= contents_y and position.y() <=page_bottom:
-                    bold = False
-                    
-                    ##For updating line numbers
-                    for i,x in enumerate(self.parent.txtInput.hidden_text_array):
-                        if block.position()>x.start_pos and i not in self.added_array:
-                            self.added_array.append(i)
-                            line_count_next += x.get_number_of_lines()
-                    #########################
-                    pen = painter.pen()
-                    pen.setColor(self.first_color)
-                    painter.setPen(pen)
-                    if block == current_block:
-                        bold = True
-                        font = painter.font()
-                        font.setBold(True)
-                        painter.setFont(font)
-                    painter.drawText(1, round(position.y()) - contents_y + font_metrics.ascent(), str(line_count_next))
-                    
-                    if bold:
-                        font = painter.font()
-                        font.setBold(False)
-                        painter.setFont(font)
-
-                    line = str(block.text())                    
-                        
-                    count += line.count('{') - line.count('}')
-                    
-                    if count == 0:
-                        last_used_color = self.first_color
-                        
-                    if count <0:
-                        
-                        count = 0
-                        last_used_color = self.first_color
-                        block = block.next()
-                        continue
-                    
-                    if line.find('{')!=-1:
-                        if x2 != -1 and y2 !=-1:
-                            pass
+                ##Find the scope also, if cursor is in a class only then display its all members
+                class_name = str(self.parent.combo_class.currentText())
+                for _class in (self.includefileclassarray + self.curr_file_class_array):
+                    if class_name == _class.name:
+                        for var in _class.list_public_members + _class.list_private_members + _class.list_protected_members:
+                            if word in var.getDeclaration():
+                                x1,y1,x2,y2 = self.cursorRect().getCoords()
+                                self.funcmatchlist.setGeometry(x2,y2,250,160)
+                                self.funcmatchlist.addItem(var.getDeclaration())
+                                self.funcmatchlist.setVisible(True)
                             
-                        #drawLine = True
-                        stack_begining_block.append(block)
-                        stack_point.append((0,round(position.y()) - contents_y)) # font_metrics.ascent()                                            
-                    
-                    if line.find('}')!=-1:                        
-                        x2 = self.width()
-                        y2 = round(position.y()) - contents_y + font_metrics.ascent()
-                        pen = painter.pen()
-                        pen.setWidth(2)                        
-                        last_used_color = QtGui.QColor(random.randrange(0,255),random.randrange(0,255),random.randrange(0,255))                        
-                        pen.setColor(last_used_color)
-                        painter.setPen(pen)                        
-
-                        x1,y1 = stack_point.pop()
-                        painter.drawLine(x1,y1,x2,y1)
-                        painter.drawLine(x1,y1,x1,y2)
-                        painter.drawLine(x1,y2,x2,y2)
-                        begining_block = stack_begining_block.pop()
-                        begining_text = str(begining_block.text())
-                        self.rect_array.append(CodeRect(0,y1,x2,y2,begining_block.position()+begining_text.find('{')+1,block.position()))
-                        
-                block = block.next()
+                for _class in (self.includefileclassarray + self.curr_file_class_array+self.curr_file_func_array):
+                    if word in _class.name and _class.name != class_name:
+                        x1,y1,x2,y2 = self.cursorRect().getCoords()
+                        self.funcmatchlist.setGeometry(x2,y2,250,160)
+                        self.funcmatchlist.addItem(_class.getDeclaration())
+                        self.funcmatchlist.setVisible(True)
                 
-            while count > 0:
-                x1,y1 = stack_point.pop()
-                begining_block = stack_begining_block.pop()
-                begining_text = str(begining_block.text())
+                ### Don't forget to add scope rule for objects
                 
-                pen = painter.pen()
-                pen.setWidth(2)
-                painter.setPen(pen)        
-                x2 = self.width()
-                y2 = round(position.y()) - contents_y + font_metrics.ascent() 
-                painter.drawLine(x1,y1,x2,y1)
-                painter.drawLine(x1,y1,x1,y2)
-                painter.drawLine(x1,y2,x2,y2)
-                ##Here, remember the position of first character of block
-                ##will be passed not 1+position of {
-                self.rect_array.append(CodeRect(0,y1,x2,y2,begining_block.position(),-1)) 
-                count -=1
+                for _object in self.list_objects+self.list_references+self.list_pointers:
+                    if word == _object.name[0:len(word)]:                                
+                        x1,y1,x2,y2 = self.cursorRect().getCoords()
+                        self.funcmatchlist.setGeometry(x2,y2,250,160)                                
+                        self.funcmatchlist.setVisible(True)                                
+                        self.funcmatchlist.addItem(_object.getDeclaration())
+        cc.clearSelection()
                 
-            self.highest_line = line_count_next
-            painter.end()
-            QtGui.QWidget.paintEvent(self, event)
+class codewidget(QtGui.QWidget):    
             
     def __init__(self,projtype,parent=None):
 
@@ -1768,13 +1439,17 @@ class codewidget(QtGui.QWidget):
         self.vbox = QtGui.QVBoxLayout(self)
         self.txtInput = txtInputclass(projtype,self)        
 
-        self.number_bar = self.NumberBar(self)
+        self.number_bar = NumberBar(self)
         self.number_bar.setTextEdit(self.txtInput)
+
+        self.breakpoints_bar = BreakpointsBar(self)
+        self.breakpoints_bar.setTextEdit(self.txtInput)
         
         self.hbox_textedit = QtGui.QHBoxLayout(self)
         self.hbox_textedit.setSpacing(0)
         self.hbox_textedit.setMargin(0)
-        self.hbox_textedit.addWidget(self.number_bar)
+        self.hbox_textedit.addWidget(self.breakpoints_bar)
+        self.hbox_textedit.addWidget(self.number_bar)        
         self.hbox_textedit.addWidget(self.txtInput)
         
         self.widget_textedit = QtGui.QWidget(self)
@@ -1796,15 +1471,23 @@ class codewidget(QtGui.QWidget):
         #self.show_combo_boxes(projtype)
         self.i=0
         self.filename=""
+
+        self.list_breakpoints=[]
+        self.drawLinePointer = False
+        self.linePointer=-1
+        self.list_breakpoints_commands=[]
         
     def eventFilter(self, object, event):
                 
         if object in (self.txtInput, self.txtInput.viewport()):
             self.number_bar.update()
+            self.breakpoints_bar.update()
             return False
+        
         return QtGui.QWidget.eventFilter(object, event)
  
     def getTextEdit(self):
+        
         return self.txtInput
     
     def show_combo_boxes(self,projtype):
@@ -1850,7 +1533,247 @@ class codewidget(QtGui.QWidget):
         
         for j in self.func_array[i]:
             self.combo_func.addItem(j)
+
+    def find_curr_func_objects(self):
+
+        try:
+            text = ""
             
+            ##Whenever a current function changes then all objects declared in that
+            ##function will be found.
+            self.txtInput.list_objects = []
+            self.txtInput.list_pointers = []
+            self.txtInput.list_references = []
+            if self.combo_funcposarray == []:
+                return
+            
+            current_func_text = str(self.combo_func.currentText())
+            _current_func = CFunction()
+            _current_func.createFromDeclaration(current_func_text)
+            
+            if self.txtInput.filetype=="C Project" or self.txtInput.filetype=="C File":
+
+                i = self.combo_func.currentIndex()
+                if len(self.combo_funcposarray)!=i+1:
+                    text = str(self.txtInput.toPlainText())[self.combo_funcposarray[i]+1:self.combo_funcposarray[i+1]+1]
+                else:
+                    text = str(self.txtInput.toPlainText())[self.combo_funcposarray[i]+1:]
+
+                current_func = None
+                for func in self.txtInput.includefilefuncarray + self.txtInput.curr_file_func_array:
+                    if _current_func.getDeclaration() == func.getDeclaration():
+                        current_func = func
+
+                ###For getting struct objects
+                if current_func!=None:
+                    
+                    for struct in self.txtInput.includefileclassarray+self.txtInput.curr_file_class_array:
+                        typedef_object_list = []
+                        for typedef in struct.list_typedef:
+                            typedef_object_list += re.findall(r'\b%s\b\s+\w+.+\s*?\;'%typedef.name,text)
+                        
+                        for object_name in re.findall(r'\b%s\b\s+\w+.+\s*?\;'%struct.getDeclaration(),text)+typedef_object_list: 
+                            if ',' not in object_name:
+                                _object = CObject()
+                                _object.createFromDeclaration(object_name)
+                                _object.scope = current_func
+                                _object.class_type = struct
+                                _object.isObject=True
+                                self.txtInput.list_objects.append(_object)
+                            else:
+                                object_name_split = object_name.split(',')
+                                _object = CObject()
+                                _object.createFromDeclaraion(object_name)
+                                _object.class_type = struct
+                                _object.isObject=True
+                                self.txtInput.list_objects.append(_object)
+                                for j in object_name_split[1:]:
+                                    _object = CObject()
+                                    _object.createFromDeclaration(_object.type+' '+j)
+                                    _object.class_type = struct
+                                    _object.isObject=True
+                                    self.txtInput.list_objects.append(_object)
+                        #print [_object.name for _object in self.txtInput.list_objects]
+                        
+                        ###For pointers
+                        typedef_pointers_list = []
+                        for typedef in struct.list_typedef:
+                            typedef_pointers_list += re.findall(r'\b%s\s*\*\s*\w+.+'%typedef.name,text)
+                            
+                        #print typedef_pointers_list
+                        
+                        for object_name in re.findall(r'\b%s\s*\*\s*\w+.+'%struct.name,text) + typedef_pointers_list:                    
+                            if ',' not in object_name:
+                                _object = CObject()
+                                _object.createFromDeclaration(object_name)
+                                _object.scope = current_func
+                                _object.class_type = struct
+                                _object.isPointer=True
+                                self.txtInput.list_pointers.append(_object)
+                            else:
+                                object_name_split = object_name.split(',')
+                                _object = CObject()
+                                _object.createFromDeclaration(object_name)
+                                _object.class_type = struct
+                                _object.isPointer=True
+                                self.txtInput.list_pointers.append(_object)
+                                for j in object_name_split[1:]:
+                                    _object = CObject()
+                                    _object.createFromDeclaration(_object.type+' '+j)
+                                    _object.class_type = struct
+                                    _object.isPointer=True
+                                    self.txtInput.list_pointers.append(_object)
+                        #print [_object.name for _object in self.txtInput.list_pointers]
+                ###########################
+                                    
+                    ###For getting primitive types objects
+                    for _type in list_primitive_types:                        
+                        for object_name in re.findall(r'\b%s\b\s+\w+.+\s*?\;'%_type.name,text):
+                            
+                            if ',' not in object_name:
+                                _object = CVariable()
+                                _object.createFromDeclaration(object_name)
+                                _object.scope = current_func
+                                _object.type=_type.name
+                                _object.isObject=True
+                                self.txtInput.list_objects.append(_object)
+                            else:                                
+                                object_name_split = object_name.split(',')
+                                _object = CVariable()
+                                _object.createFromDeclaration(object_name_split[0])
+                                _object.scope = current_func
+                                _object.type=_type.name
+                                _object.isObject=True
+                                self.txtInput.list_objects.append(_object)
+                                for j in object_name_split[1:]:
+                                    _object = CVariable()
+                                    _object.createFromDeclaration(_type.name+' '+j)
+                                    _object.scope = current_func
+                                    _object.type=_type.name
+                                    _object.isObject=True
+                                    self.txtInput.list_objects.append(_object)                        
+                        
+                        ###For pointers  
+                        for object_name in re.findall(r'\b%s\s*\*\s*\w+.+'%_type.name,text):
+                            if ',' not in object_name:
+                                _object = CVariable()
+                                _object.createFromDeclaration(object_name)
+                                _object.scope = current_func
+                                _object.type=_type.name
+                                _object.isPointer=True
+                                self.txtInput.list_pointers.append(_object)
+                            else:
+                                object_name_split = object_name.split(',')
+                                _object = CVariable()
+                                _object.createFromDeclaration(object_name_split[0])
+                                _object.scope = current_func
+                                _object.type=_type.name
+                                _object.isPointer=True
+                                self.txtInput.list_pointers.append(_object)
+                                for j in object_name_split[1:]:
+                                    _object = CVariable()
+                                    _object.createFromDeclaration(_type.name+'* '+object_name)
+                                    _object.scope = current_func
+                                    _object.type=_type.name
+                                    _object.isPointer=True
+                                    self.txtInput.list_pointers.append(_object)                        
+            else:
+                class_current_index = self.combo_class.currentIndex()
+                i = self.combo_func.currentIndex()
+                    
+                if len(self.combo_funcposarray[class_current_index])!=i+1:
+                    text = str(self.txtInput.toPlainText())[self.combo_funcposarray[class_current_index][i]+1:self.combo_funcposarray[class_current_index][i+1]+1]
+                else:
+                    text = str(self.txtInput.toPlainText())[self.combo_funcposarray[class_current_index][i]+1:]
+
+                for _class in self.txtInput.includefileclassarray+self.txtInput.curr_file_class_array:
+                    ##First find the scope of the variable, i.e. the function where
+                    ##variable is declared            
+                    current_func = None
+                    __class=None
+                    
+                    for __class in self.txtInput.includefileclassarray+self.txtInput.curr_file_class_array:
+                        if __class.name == str(self.combo_class.currentText()):
+                            for func in __class.list_public_members+__class.list_private_members+__class.list_protected_members:
+                                #print func.name
+                                if func.var_type=="Function":                            
+                                    if _current_func.getDeclaration()==func.getDeclaration():                                
+                                        current_func = func
+                                        break
+                        
+                    ###Found the scope in current_func
+
+                    ###For objects                
+                    for object_name in re.findall(r'\b%s\b\s+\w+.+\s*?\;'%_class.name,text):                
+                        if ',' not in object_name:
+                            _object = CPPObject()
+                            _object.createFromDeclaration(object_name)
+                            _object.scope = current_func
+                            _object.class_type = _class
+                            _object.isObject=True
+                            self.txtInput.list_objects.append(_object)
+                        else:
+                            object_name_split = object_name.split(',')
+                            _object = CPPObject()
+                            _object.createFromDeclaraion(object_name)
+                            _object.class_type = _class
+                            _object.isObject=True
+                            self.txtInput.list_objects.append(_object)
+                            for j in object_name_split[1:]:
+                                _object = CPPObject()
+                                _object.createFromDeclaration(_object.type+' '+j)
+                                _object.class_type = _class
+                                _object.isObject=True
+                                self.txtInput.list_objects.append(_object)
+
+                    ###For pointers
+                    for object_name in re.findall(r'\b%s\b\*\s+\w+.+\s*?\;'%_class.name,text):                    
+                        if ',' not in object_name:
+                            _object = CPPObject()
+                            _object.createFromDeclaration(object_name)
+                            _object.scope = current_func
+                            _object.class_type = _class
+                            _object.isPointer=True
+                            self.txtInput.list_pointers.append(_object)
+                        else:
+                            object_name_split = object_name.split(',')
+                            _object = CPPObject()
+                            _object.createFromDeclaraion(object_name)
+                            _object.class_type = _class
+                            self.txtInput.list_pointers.append(_object)
+                            for j in object_name_split[1:]:
+                                _object = CPPObject()
+                                _object.createFromDeclaration(_object.type+' '+j)
+                                _object.class_type = _class
+                                _object.isPointer=True
+                                self.txtInput.list_pointers.append(_object)
+
+                    ###For References                
+                    for object_name in re.findall(r'\b%s\b\&\s+\w+.+\s*?\;'%_class.name,text):                    
+                        if ',' not in object_name:
+                            _object = CPPObject()
+                            _object.createFromDeclaration(object_name)
+                            _object.scope = current_func
+                            _object.class_type = _class
+                            _object.isReference=True
+                            self.txtInput.list_references.append(_object)
+                        else:
+                            object_name_split = object_name.split(',')
+                            _object = CPPObject()
+                            _object.createFromDeclaraion(object_name)
+                            _object.class_type = _class
+                            _object.isReference=True
+                            self.txtInput.list_references.append(_object)
+                            for j in object_name_split[1:]:
+                                _object = CPPObject()
+                                _object.createFromDeclaration(_object.type+' '+j)
+                                _object.class_type = _class
+                                _object.isReference=True
+                                self.txtInput.list_references.append(_object)
+
+        except AttributeError:
+             pass
+        
     def combo_func_item_activated(self,i):
         
         ######Go to position of function in txtinput
@@ -1864,8 +1787,40 @@ class codewidget(QtGui.QWidget):
         for i,x in enumerate(self.txtInput.hidden_text_array):
             if x.start_pos < pos:
                 pos -= x.length-len('\n...\n')
-                
+
+        self.find_curr_func_objects()
         cc.setPosition(pos,cc.MoveAnchor)
         #print "GOING AT %i"%(pos)
         self.txtInput.setTextCursor(cc)
         self.txtInput.highlightcurrentline()        
+
+    def sendSetBreakpointSignal(self,line):
+
+        self.emit(QtCore.SIGNAL('setBreakpoint(int)'),line)
+        self.list_breakpoints_commands.append('-break-insert '+self.filename+':'+str(line))
+        
+    def breakpointChange(self,breakpoint):
+
+        self.emit(QtCore.SIGNAL('breakpointStateChanged(int,int)'),int(breakpoint.line),int(breakpoint.state))
+
+        if breakpoint.state==BREAKPOINT_STATE_DISABLED:            
+            for command in self.list_breakpoints_commands:
+                if command.find(str(breakpoint.line))!=-1:
+                    self.list_breakpoints_commands.remove(command)
+                    break
+        else:
+            for _breakpoint in self.list_breakpoints:
+                if int(_breakpoint.line)==int(breakpoint.line):
+                    self.list_breakpoints_commands.append('-break-insert '+ self.filename+':'+str(breakpoint.line))
+                    break                    
+
+    def hideLinePointer(self):
+
+        self.drawLinePointer = False
+        self.breakpoints_bar.repaint()
+        
+    def setLinePointerAtLine(self,line):
+
+        self.linePointer=line
+        self.drawLinePointer = True
+        self.breakpoints_bar.repaint()

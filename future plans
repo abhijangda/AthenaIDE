@@ -1,0 +1,7 @@
+path browser
+you can find include files like stdio.h etc. in /usr/include/ 
+show matching parenthesis
+add file monitor
+add intellisense
+add features of GTK+ Creator
+add GTK+ and gtkmm support also

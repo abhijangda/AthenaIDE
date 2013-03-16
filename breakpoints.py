@@ -1,77 +1,78 @@
-#77 Lines
-from PyQt4 import QtGui,QtCore
+BREAKPOINT_STATE_ENABLED = 1
+BREAKPOINT_STATE_DISABLED=2
 
-class create_breakpoints(QtGui.QDialog):
+class BreakpointBase(object):
 
-    def __init__(self,parent=None):
+    def __init__(self,_type,state=1):
 
-        QtGui.QDialog.__init__(self,parent)
-        self.setWindowTitle('Create Breakpoint')
-        lblbreakpoint = QtGui.QLabel("Set Breakpoint at",self)
-        lblbreakpoint.setGeometry(20,10,131,21)
+        self.state=1
+        self.type=_type
+
+    def set_id(self,i):
         
-        self.radio_func = QtGui.QRadioButton("Function",self)
-        self.radio_func.setGeometry(20,50,108,26)
-        self.connect(self.radio_func,QtCore.SIGNAL('clicked()'),self.radio_func_clicked)
-        self.radio_line = QtGui.QRadioButton("Line",self)
-        self.radio_line.setGeometry(20,110,108,26)
-        self.connect(self.radio_line,QtCore.SIGNAL('clicked()'),self.radio_line_clicked)
-        self.radio_address = QtGui.QRadioButton("Address",self)
-        self.connect(self.radio_address,QtCore.SIGNAL('clicked()'),self.radio_address_clicked)
-        self.radio_address.setGeometry(20,220,108,26)
+        self.id = i
         
-        self.txtfunc = QtGui.QLineEdit(self)
-        self.txtfunc.setGeometry(190,50,181,31)
-        self.txtfile = QtGui.QLineEdit(self)
-        self.txtfile.setGeometry(190,110,181,31)
-        self.txtline = QtGui.QLineEdit(self)
-        self.txtline.setGeometry(190,160,181,31)
-        self.txtaddress = QtGui.QLineEdit(self)
-        self.txtaddress.setGeometry(190,220,181,31)
-        lblfile = QtGui.QLabel("File",self)
-        lblfile.setGeometry(100,116,66,21)
-        lbllinenumber = QtGui.QLabel("Line Number",self)
-        lbllinenumber.setGeometry(100,160,91,21)
+class LineBreakpoint(BreakpointBase):
+
+    def __init__(self,state,line,filename):
+
+        BreakpointBase.__init__(self,"LineBreakpoint",state)
+        self.line = line
+        self.filename= filename
+
+class AddressBreakpoint(BreakpointBase):
+
+    def __init__(self,state,address):
+
+        BreakpointBase.__init__(self,"AddressBreakpoint",state)
+        self.address=address
+
+class FunctionBreakpoint(BreakpointBase):
+
+    def __init__(self,state,func):
+
+        BreakpointBase.__init__(self,"FunctionBreakpoint",state)
+        self.func=func
+
+class Watchpoint(BreakpointBase):
+
+    def __init__(self,var,condition,state=1):
+
+        BreakpointBase.__init__(self,"Watchpoint",1)
+        self.var = var
+        self.condition=condition
         
-        cmdsetbreakpoint = QtGui.QPushButton("Set Breakpoint",self)
-        cmdsetbreakpoint.setGeometry(261,270,111,31)
-        self.connect(cmdsetbreakpoint,QtCore.SIGNAL('clicked()'),self.cmdsetbreakpoint_clicked)
-        cmdcancel = QtGui.QPushButton("Cancel",self)
-        cmdcancel.setGeometry(150,270,95,31)
-        self.connect(cmdcancel,QtCore.SIGNAL('clicked()'),self.cmdcancel_clicked)
+class CatchpointBase(BreakpointBase):
 
-        self.radio_func.setChecked(True)
-        self.radio_func_clicked()
+    def __init__(self,state=1):
 
-    def radio_address_clicked(self):
+        BreakpointBase.__init__(self,"Catchpoint",state)
+
+class CatchpointThrow(CatchpointBase):
+
+    def __init__(self,state=1):
+
+        CatchpointBase.__init__(self,state)
+        self.type="Catchpoint Throw"
         
-        if  self.radio_address.isChecked()== True:
-            self.txtaddress.setEnabled(True)
-            self.txtfunc.setEnabled(False)
-            self.txtfile.setEnabled(False)
-            self.txtline.setEnabled(False)
-            
-    def radio_func_clicked(self):
+class CatchpointExec(CatchpointBase):
 
-        if self.radio_func.isChecked() == True:
-            self.txtfunc.setEnabled(True)
-            self.txtfile.setEnabled(False)
-            self.txtline.setEnabled(False)           
-            self.txtaddress.setEnabled(False)
-            
-    def radio_line_clicked(self):
+    def __init__(self,state=1):
 
-        if self.radio_line.isChecked() == True:
-            self.txtfile.setEnabled(True)
-            self.txtline.setEnabled(True)
-            self.txtfunc.setEnabled(False)        
-            self.txtaddress.setEnabled(False)
-            
-    def cmdsetbreakpoint_clicked(self):
+        CatchpointBase.__init__(self,state)
+        self.type="Catchpoint Exec"
+        
+class CatchpointCatch(CatchpointBase):
 
-        self.emit(QtCore.SIGNAL('setbreakpoint()'))
-        self.destroy()
+    def __init__(self,state=1):
 
-    def cmdcancel_clicked(self):
+        CatchpointBase.__init__(self,state)
+        self.type="Catchpoint Catch"
+        
+class CatchpointSysCall(CatchpointBase):
 
-        self.close()
+    def __init__(self,syscall,state=1):
+
+        self.syscall=syscall
+        CatchpointBase.__init__(self,state)
+        self.type="Catchpoint SysCall"

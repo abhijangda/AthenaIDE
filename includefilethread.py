@@ -1,6 +1,8 @@
 #177 Lines
 from PyQt4 import QtCore
 import re
+from c_cpp_types import *
+from helper_functions import *
 
 class IncludeFileThread(QtCore.QThread):
 
@@ -12,14 +14,14 @@ class IncludeFileThread(QtCore.QThread):
         self.includefiledatatypearray = []
         self.includefileslist = includefilenamearray
         self.filetype = filetype
-        self.datatypearray = ['char','double','float','int','long','void']
-
+        self.list_typedef = []
+        
     def setfilelist(self,filelist):
         self.includefileslist = filelist
         #print filelist
 
     def run(self):
-        
+
         self.includefileclassarray = []
         self.includefilefuncarray = []
         self.includefiledatatypearray = []
@@ -33,170 +35,128 @@ class IncludeFileThread(QtCore.QThread):
                     text += d
                 f.close()
                 #print text
-                for i in self.datatypearray:
-                    for search_iter in re.finditer(r'\b%s\b\s*(\w+.+)\s*{'%i,text):
-                        d = search_iter.group()                    
-                        d = d[d.find(i)+len(i)+1:d.rfind('\n')]                    
-                        if "(" in d and ")" in d and "=" not in d:
-                                self.includefilefuncarray.append(d)
-                                self.includefiledatatypearray.append(i)
-                    for search_iter in re.finditer(r'\b%s\b\s*(\w+.+)\;'%i,text):
-                        d = search_iter.group()                    
-                        d = d[d.find(i)+len(i)+1:d.rfind('\n')]                    
-                        if "(" in d and ")" in d and "=" not in d:
-                            if d not in self.includefilefuncarray:
-                                self.includefilefuncarray.append(d)
-                                self.includefiledatatypearray.append(i)
-            #print self.includefilefuncarray              
-        if self.filetype == 'C++ Project' or self.filetype == 'C++ File':            
-            for filename in self.includefileslist:
-                print filename
+
+                cpp_reg_array = re.findall(r'\bstruct\b\s*\w+.+?\}\s*\;',text,re.DOTALL)
+                
+                if cpp_reg_array!=[]:
+                    for class_definition in cpp_reg_array:
+                        
+                        if class_definition.count('{')>class_definition.count('}'):
+                            regex_array = re.findall(r'(?<=\}\;)\s*\w+.+?(?=\}\;)',text,re.DOTALL)
+                            count = class_definition.count('{')-class_definition.count('}')
+                            i=0
+                            while count>0 and i<len(regex_array):
+                               class_definition += regex_array[i] + '};'
+                               count = class_definition.count('{')-class_definition.count('}')
+
+                        class_definition = class_definition[class_definition.find('struct'):]
+
+                        text = text.replace(class_definition,'')
+
+                        c_struct = CStruct()
+                        c_struct.createFromDeclaration(class_definition)
+                        self.includefileclassarray.append(c_struct)
+
+                    for struct in self.includefileclassarray:
+
+                        d = re.findall(r'\btypedef\s+%s\s+.+;'%struct.getDeclaration(),text)
+                        
+                        for s in d:
+                            s = s.replace(';','')
+                            typedef = CTypedef()
+                            typedef.createFromDeclaration(s)
+                            typedef.typedef_with = struct
+                            struct.list_typedef.append(typedef)
+                            self.list_typedef.append(typedef)
+                    
+                for search_iter in re.finditer(r'[\w*]+[\s*]+[\w*]+\(+.+\)\s*{',text):
+                    #print d,filename
+                    d = search_iter.group()                    
+                    d = d[:d.rfind('\n')]
+                    if isThisAFunction(d)==False:
+                        continue
+                    func = CFunction()
+                    func.createFromDeclaration(d)
+                    self.includefilefuncarray.append(func)                    
+                    #self.includefiledatatypearray.append(i)
+                    
+                for search_iter in re.finditer(r'[\w*]+[\s*]+[\w*]+\(+.+\)\s*;',text):
+                    d = search_iter.group()                    
+                    d = d[:d.rfind('\n')]
+                    func = CFunction()
+                    func.createFromDeclaration(d)
+                    
+                    if isThisAFunction(d)==False:
+                        continue
+                    
+                    should_continue = False
+                    for _func in self.includefilefuncarray:
+                        if _func.isEqualTo(func)==True:
+                            should_continue = True
+                            break
+                    if should_continue==True:
+                        continue
+                    
+                    self.includefilefuncarray.append(func)              
+                        
+        elif self.filetype == 'C++ Project' or self.filetype == 'C++ File':            
+            for filename in self.includefileslist:                
                 f = open(filename,'r')
                 text = ''
                 for d in f:
                     text += d
                 f.close()
                 #print text
-                cpp_reg_array = re.findall(r'\bclass\b\s*(\w+.+?\}\s*\;)',text,re.DOTALL)
+                cpp_reg_array = re.findall(r'[\btemplate\s*<class\s+\w+\s*>]*\bclass\b\s*\w+.+?\}\s*\;',text,re.DOTALL)
+                
                 if cpp_reg_array!=[]:
                     for class_definition in cpp_reg_array:
-                        self.includefilefuncarray.append([])
-                        self.includefiledatatypearray.append([])
-                        #print class_definition
-                        if re.findall(r'>\s*\bclass\b\s*\w+',class_definition)!=[]:
-                            class_definition = class_definition[class_definition.index('>')+1:len(class_definition)]
-                            class_definition = class_definition.lstrip()                        
-                            class_name = re.findall(r'\bclass\b\s*(\w+)',class_definition)[0]
-                            count = len(re.findall(r'\benum\b',class_definition)) + len(re.findall(r'\bclass\b',class_definition)) + len(re.findall(r'\bstruct\b',class_definition))
-                            count -= len(re.findall(r'\}\s*;',class_definition))
-                            i=0
-                            regex_array = re.findall(r'(?<=\}\;)\s*\w+.+?(?=\}\;)',text,re.DOTALL)
-                            while(count>0):
-                                if i<len(regex_array):
-                                    class_definition += regex_array[i]+'};'
-                                else:
-                                    break
-                                count = len(re.findall(r'\benum\b',class_definition)) + len(re.findall(r'\bclass\b',class_definition)) + len(re.findall(r'\bstruct\b',class_definition))
-                                count -= len(re.findall(r'\}\s*;',class_definition))                            
-                                i+=1
-                            class_definition = class_definition[class_definition.index('class')+len('class'):]
-                            self.includefileclassarray.append(class_name)                        
-                        else:                        
-                            count = len(re.findall(r'\benum\b',class_definition)) + len(re.findall(r'\bclass\b',class_definition)) + len(re.findall(r'\bstruct\b',class_definition))
-                            count -= len(re.findall(r'\}\s*;',class_definition))
-                            i=0
-                            regex_array = re.findall(r'(?<=\}\;)\s*\w+.+?(?=\}\;)',text,re.DOTALL)
-                            while(count>0):
-                                if i< len(regex_array):
-                                    class_definition += regex_array[i]+'};'
-                                else:
-                                    break
-                                count = len(re.findall(r'\benum\b',class_definition)) + len(re.findall(r'\bclass\b',class_definition)) + len(re.findall(r'\bstruct\b',class_definition))
-                                count -= len(re.findall(r'\}\s*;',class_definition))                            
-                                i+=1                       
-                            
-                            class_name = re.findall(r'\s*(\w+)',class_definition)[0]                        
-                            self.includefileclassarray.append(class_name)
-                        #print class_definition
-                        ###Removing any number of nested classes and enums and structs
-                        ##Can also be done using re.sub function
-                        ##Try re.sub function to improve performance
-                        class_definition = class_definition[class_definition.index('{')+1:]
-                        class_definition_new = ""
-                        end=0
-                        for search_iter in re.finditer(r'\bclass\b\s*(\w+.+?\}\s*\;)',class_definition,re.DOTALL):
-                            class_definition_new+=class_definition[end:search_iter.start()]
-                            end=search_iter.end()
-                        class_definition_new+=class_definition[end:]
-                        class_definition = class_definition_new
-
-                        class_definition_new = ""
-                        end=0
-                        for search_iter in re.finditer(r'\benum\b(.+?\}\s*\;)',class_definition,re.DOTALL):
-                            class_definition_new+=class_definition[end:search_iter.start()]
-                            end=search_iter.end()
-                        class_definition_new+=class_definition[end:]
-                        class_definition = class_definition_new                    
-
-                        class_definition_new = ""
-                        end=0
-                        for search_iter in re.finditer(r'\bstruct\b\s*(\w+.+?\}\s*\;)',class_definition,re.DOTALL):
-                            class_definition_new+=class_definition[end:search_iter.start()]
-                            end=search_iter.end()
-                        class_definition_new+=class_definition[end:]
-                        class_definition = class_definition_new
-
-                        ##Code to detect inline functions 
-                        ##Here inline functions body will be removed from the class_definition
-                        ##Also inline functions will be converted to normal non-inlined functions
-                        inline_function=""
-                        bracket_array=[('{',i.start()) for i in re.finditer(r'\{',class_definition)]
-                        bracket_array+=[('}',j.start()) for j in re.finditer(r'\}',class_definition)]                    
-                        #print class_definition
-                        for i in range(len(bracket_array)):
-                            for k in range(len(bracket_array)-1):
-                                if bracket_array[k][1]>bracket_array[k+1][1]:
-                                    o=bracket_array[k+1]
-                                    bracket_array[k+1]=bracket_array[k]
-                                    bracket_array[k]=o                    
-                        class_definition_new=""
-                        n=0
-                        for search_iter in re.finditer(r'\s*(\w+.+)\s*\{',class_definition):
-                            inline_function = search_iter.group()
-                            class_definition_new += class_definition[n:search_iter.end()-1]+';'
-                            if inline_function.find('{')!=-1:
-                                inline_function = inline_function[:inline_function.find('{')]
-                            count = 0
-                            for j,i in enumerate(bracket_array):
-                                if i[0]=='{':
-                                    count +=1
-                                else:
-                                    count -=1
-                                if count ==0:
-                                    break
-                            n=bracket_array[j][1]+1
-                            bracket_array = bracket_array[j+1:]
-                        if bracket_array !=[]:
-                            class_definition_new +=class_definition[n:bracket_array[len(bracket_array)-1][1]]
-                        else:
-                            class_definition_new +=class_definition[n:]
-                        class_definition = class_definition_new
-                                                  
-                        ##Find out the members
-                        reg_exp_funcarray = re.findall(r'\s+(.+\w+.+)\s*?\;',class_definition)
                         
-                        if reg_exp_funcarray != []:                        
-                            
-                            for d in reg_exp_funcarray:
-                                add = False
-                                if "(" in d and ")" in d and "=" not in d:
-                                    add = True
-                                    index_open_bracket = d.rfind('(')
-                                    space_rindex = 0
-                                    for search_iter in re.finditer(r'\s*\w+\(',d):
-                                        space_rindex = search_iter.start()                                    
+                        if class_definition.count('{')>class_definition.count('}'):
+                            regex_array = re.findall(r'(?<=\}\;)\s*\w+.+?(?=\}\;)',text,re.DOTALL)
+                            count = class_definition.count('{')-class_definition.count('}')
+                            i=0
+                            while count>0 and i<len(regex_array):
+                               class_definition += regex_array[i] + '};'
+                               count = class_definition.count('{')-class_definition.count('}')
 
-                                if "(" not in d and ")" not in d:
-                                    if '=' in d:
-                                        add = True
-                                        equals_index = d.rfind('=')
-                                        can_break = False
-                                        for space_rindex in range(equals_index,0,-1):
-                                            if d[space_rindex].isalnum() or d[space_rindex] == '_':
-                                                can_break = True
-                                            else:
-                                                if d[space_rindex].isspace() and can_break == True:
-                                                    break                                    
-                                    else:
-                                        add = True
-                                        space_rindex = d.rfind(' ')                            
-                                if add == True:
-                                    if '=' in d:
-                                        self.includefilefuncarray[len(self.includefilefuncarray)-1].append(d[space_rindex:equals_index-1].lstrip())
-                                    else:
-                                        self.includefilefuncarray[len(self.includefilefuncarray)-1].append(d[space_rindex:].lstrip())
-                                        self.includefiledatatypearray[len(self.includefiledatatypearray)-1].append(d[0:space_rindex].rstrip())
-        
-##            print self.includefiledatatypearray
-##            print self.includefilefuncarray
-            print self.includefileclassarray
+                        if 'template' in class_definition:
+                            class_definition = class_definition[class_definition.find('template'):]
+                        else:
+                            class_definition = class_definition[class_definition.find('class'):]
+
+                        text = text.replace(class_definition,'')
+
+                        cpp_class = CPPClass()
+                        #print class_definition
+                        cpp_class.createFromDeclaration(class_definition)
+                        self.includefileclassarray.append(cpp_class)
+                        
+##            for _class in self.includefileclassarray:
+##                print _class.name,"class name"
+##                print 'public'
+##                for _var in _class.list_public_members:
+##                    print _var.type + _var.return_type + _var.name
+##
+##                print 'private'
+##                for _var in _class.list_private_members:
+##                    print _var.type + _var.return_type + _var.name
+##
+##                print 'protected'
+##                for _var in _class.list_protected_members:
+##                    print _var.type + _var.return_type + _var.name
+##
+##                print 'nested'
+##                for __class in _class.list_nested_class_structs:
+##                    print __class.name,"         class name"
+##                    print '         public'
+##                    for _var in __class.list_public_members:
+##                        print _var.type + _var.return_type + _var.name
+##
+##                    print '      private'
+##                    for _var in __class.list_private_members:
+##                        print _var.type + _var.return_type + _var.name
+##
+##                    print '     protected'
+##                    for _var in __class.list_protected_members:
+##                        print _var.type + _var.return_type + _var.name

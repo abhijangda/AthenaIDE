@@ -73,7 +73,7 @@ class shell(QtGui.QMainWindow):
 
         if return_val[0] == 0:
             
-            os.execv("/usr/bin/bash",["/usr/bin/bash"])
+            os.execv("/bin/bash",["/bin/bash"])
             
         QtGui.QMainWindow.__init__(self,parent)
         
@@ -98,8 +98,10 @@ class shell(QtGui.QMainWindow):
         self.thread.start()    
 
         if len(sys.argv)>1:
-            os.write(self.fd,sys.argv[1]+'\n')
-            
+            filename = sys.argv[1]
+            for i in range(2,len(sys.argv)):
+                filename += ' ' + sys.argv[i]
+            os.write(self.fd,sys.argv[1]+'\n')            
             
     def readOutput(self,string):
         

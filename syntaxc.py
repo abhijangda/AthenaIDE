@@ -70,6 +70,20 @@ class CHighlighter (QSyntaxHighlighter):
         # FIXME: The triple-quotes in these two lines will mess up the
         # syntax highlighting from this point onward
         
+        
+        self.build_rules()
+
+        self.comment_started = False
+        self.index_comment_start = -1
+        self.index_comment_end = -1
+
+        self.document = document
+
+        self.list_multi_line_comment_pos = []
+
+    def build_rules(self):
+
+        self.multiline_comment = (QRegExp("/\*"),QRegExp("\*/"), 1, STYLES['comment'])
         rules = []
                 
         # Keyword, operator, and brace rules
@@ -106,79 +120,31 @@ class CHighlighter (QSyntaxHighlighter):
         # Build a QRegExp for each pattern
         self.rules = [(QRegExp(pat), index, fmt)
             for (pat, index, fmt) in rules]
-
-        self.comment_started = False
-        self.index_comment_start = -1
-        self.index_comment_end = -1
-
+        
     def highlightBlock(self, text):
         """Apply syntax highlighting to the given block of text.
-        """
-        
-        str_text = str(text)
-        if self.comment_started == False:            
-        # Do other syntax formatting
-            for expression, nth, format in self.rules:
-                index = expression.indexIn(text, 0)
-                
-                while index >= 0:
-                    # We actually want the index of the nth match
-                    index = expression.pos(nth)
-                    length = expression.cap(nth).length()
-                    self.setFormat(index, length, format)
-                    index = expression.indexIn(text, index + length)
-            self.setCurrentBlockState(0)
+        """        
 
-            self.index_comment_start = str_text.find('/*')
-            if self.index_comment_start !=-1:
-                self.index_comment_end = -1
-                #print 'found /*',self.comment_started
-                if '*/' in str_text:
-                    #print 'found */ and /*',self.comment_started
-                    self.index_comment_end = str_text.index('*/')                    
-                    self.setFormat(self.index_comment_start,self.index_comment_end-self.index_comment_start+2,STYLES['comment'])                    
-                else:
-                    #print 'found /* and not */',self.comment_started
-                    self.comment_started = True
-                    self.setFormat(self.index_comment_start,len(str_text)-self.index_comment_start,STYLES['comment'])
-            else:                
-                if '*/' in str_text:
-                    #print 'found not /* and */',self.comment_started
-                    self.index_comment_end = str_text.index('*/')
-                    self.setFormat(0,self.index_comment_end+2,STYLES['comment'])
-        else:
-            if '*/' in str_text and '/*' in str_text:
-                #print 'found /* and */',self.comment_started
-                self.index_comment_end = str_text.index('*/')
-                self.index_comment_start = -1
-                self.setFormat(self.index_comment_start,len(str_text)-self.index_comment_end-self.index_comment_start,STYLES['comment'])
-                self.comment_started = False
-            else:
-                if '*/' in str_text:
-                    #print 'found not /* and */',self.comment_started
-                    self.comment_started = False
-                    self.index_comment_end = str_text.index('*/')
-                    self.setFormat(0,self.index_comment_end+2,STYLES['comment'])
-                else:
-                    if '/*' in str_text:
-                        #print 'found /* and not */',self.comment_started
-                        self.setFormat(self.index_comment_start,len(str_text)-self.index_comment_start,STYLES['comment'])
-                    else:
-                        #print 'found not/* and not */',self.comment_started
-                        self.setFormat(0,len(str_text),STYLES['comment'])        
-        
-        #self.comment_start = QRegExp("/\*")
-        #self.comment_end = QRegExp("\*/")
-        #self.match_multiline(text, self.comment_start,self.comment_end,1, STYLES['comment'])
-        
-    def match_multiline(self, text, delimiter_start,delimiter_end, in_state, style):
-        """Do highlighting of multi-line strings. ``delimiter`` should be a
-        ``QRegExp`` for triple-single-quotes or triple-double-quotes, and
-        ``in_state`` should be a unique integer to represent the corresponding
-        state changes when inside those strings. Returns True if we're still
-        inside a multi-line string when this function is finished.
-        """
-        """# If inside triple-single quotes, start at 0
+        str_text = str(text)        
+        # Do other syntax formatting
+        try:
+            r = self.rules
+        except AttributeError:
+            self.build_rules()
+        for expression, nth, format in self.rules:
+            index = expression.indexIn(text, 0)                
+            while index >= 0:
+                # We actually want the index of the nth match
+                index = expression.pos(nth)
+                length = expression.cap(nth).length()
+                self.setFormat(index, length, format)
+                index = expression.indexIn(text, index + length)
+                
+        self.setCurrentBlockState(0)
+        in_multiline = self.match_multiline(text, *self.multiline_comment)       
+
+    def match_multiline(self,text,delimiter_start,delimiter_end,in_state,style):
+
         if self.previousBlockState() == in_state:
             start = 0
             add = 0
@@ -194,7 +160,7 @@ class CHighlighter (QSyntaxHighlighter):
             end = delimiter_end.indexIn(text, start + add)
             # Ending delimiter on this line?
             if end >= add:
-                length = end - start + add + delimiter_start.matchedLength()
+                length = end - start + add + delimiter_end.matchedLength()
                 self.setCurrentBlockState(0)
             # No; multi-line string
             else:
@@ -203,4 +169,10 @@ class CHighlighter (QSyntaxHighlighter):
             # Apply formatting
             self.setFormat(start, length, style)
             # Look for the next match
-            start = delimiter_end.indexIn(text, start + length)"""        
+            start = delimiter_start.indexIn(text, start + length)
+
+        # Return True if still inside a multi-line string, False otherwise
+        if self.currentBlockState() == in_state:
+            return True
+        else:
+            return False
