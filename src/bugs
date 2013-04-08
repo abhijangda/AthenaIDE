@@ -1,0 +1,12 @@
+also, in C++ Project having file with cpp_class_definition = False deletes all the function when some text is deleted. 
+There's also a tooltip bug remember to find and correct it 
+multi line comment problem
+In C File,when typing functions are added in combo box (and I think in self.includefilefuncarray also) in a reverse order
+At startup, Word Wrap is automatically enabled
+Add a case when the function is renamed, instead of first delete then add the function with different name.
+A function returning int will be placed higher in combo box than void, in a C File or Project
+Also, add the case when there is no selection in Increase/Decrease Indentation and comment out
+Close of the exit dialog(The dialog which appears when you close a file and you haven't saved any of them) doesn't do anything
+if a file is opened and it is deleted, then it is not saved
+when you try to add existing file and click on cancel then a file with empty string path is added.
+when a text is selected and cursor is in the front of line and when backspace is pressed selected text is not deleted
