@@ -16,3 +16,8 @@ Running
 Execute the athena.sh script to run AthenaIDE.
 
 Please mail bugs to abhijangda@hotmail.com
+
+Requirements
+=========
+Python 2.7
+PyQt4 
