@@ -4,9 +4,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-###The cause of C++ Big Programs Compiling Problem could be line no. 1660
-###Add running a program with arguments, environment variables and current
-
 import syntaxc,syntaxcpp,project_class,save_as_project
 import txtinput,compiler,options,newproject,proj_manager,classbrowser
 import gdb_interface,about_file,breakpoints_dialog,set_breakpoint,locals_dlg
@@ -16,6 +13,7 @@ from PyQt4 import QtGui,QtCore
 from PyQt4.Qt import QSyntaxHighlighter,QTextCursor,QPoint
 from time import strftime
 import os,threading,pty,termios,fcntl
+global app
 
 class ReadFileThread(QtCore.QThread):
 
@@ -110,7 +108,7 @@ class athena(QtGui.QMainWindow):
         self.setWindowIcon(QtGui.QIcon('../icons/texteditor.png'))
 
         self.gdbConsoleDialog = gdb_interface.GdbConsoleDlg(self.fd,self)
-        self.connect(self.gdbConsoleDialog,QtCore.SIGNAL('processStoppedBreakpointHit(QString,int)'),self.processStoppedBreakpointHit)        
+        self.connect(self.gdbConsoleDialog,QtCore.SIGNAL('processStoppedBreakpointHit(QString,int)'),self.processStoppedBreakpointHit)
         self.connect(self.gdbConsoleDialog,QtCore.SIGNAL('processStoppedSignalRecieved(QString,QString,int)'),self.processStoppedSignalRecieved)
         self.connect(self.gdbConsoleDialog,QtCore.SIGNAL('processStopped()'),self.processStopped)
         self.connect(self.gdbConsoleDialog,QtCore.SIGNAL('showLocals(QString)'),self.gdbConsoleDialogShowLocals)
@@ -566,11 +564,33 @@ class athena(QtGui.QMainWindow):
         self.connect(next_bookmark,QtCore.SIGNAL('triggered()'),self.funcnextbookmark)
         self.connect(clear_bookmark,QtCore.SIGNAL('triggered()'),self.funcclearbookmark)
         
-        compilemenu = menubar.addMenu('&Compile')
-        compilemenu.addAction(cmdgcccompile)
-        compilemenu.addSeparator()
-        compilemenu.addAction(cmdgppcompile)
-        toolbarcompile.setMenu(compilemenu)        
+        buildmenu = menubar.addMenu('&Build')
+
+        self.compile = QtGui.QAction('Compile File',self)
+        self.build_proj = QtGui.QAction('Build Project',self)
+
+        self.connect(self.build_proj, QtCore.SIGNAL('triggered()'), self.build_proj_triggered)
+        
+        self.clean_build = QtGui.QAction('Clean Build' ,self)
+        self.connect(self.clean_build, QtCore.SIGNAL('triggered()'), self.clean_build_triggered )
+        
+        self.clean_src = QtGui.QAction('Clean(src)' ,self)
+        self.connect(self.clean_src, QtCore.SIGNAL('triggered()'), self.clean_src_triggered)
+
+        self.create_auto_tools_files = QtGui.QAction ('Create Auto Tools Files', self)
+        self.connect(self.create_auto_tools_files, QtCore.SIGNAL('triggered()'), self.create_auto_tools_files_triggered)
+        
+        buildmenu.addAction(self.compile)
+        buildmenu.addAction(cmdgcccompile)
+        buildmenu.addAction(cmdgppcompile)
+        buildmenu.addSeparator()
+        buildmenu.addAction(self.build_proj)
+        buildmenu.addSeparator()
+        buildmenu.addAction(self.clean_build)
+        buildmenu.addAction(self.clean_src)
+        buildmenu.addSeparator ()
+        buildmenu.addAction(self.create_auto_tools_files)
+        toolbarcompile.setMenu(buildmenu)        
 
         ####Debug Menu#####
         self.gdb_console = QtGui.QAction('Open GDB Console',self)
@@ -2172,17 +2192,117 @@ class athena(QtGui.QMainWindow):
                 for i in range(len(self.indentwidth)):
                     cc.deleteChar()
 
-    def toolbarrun(self):        
+    def check_build_files(self):
 
-        if self.mode == "File" and self.filestate[self.tabs.currentIndex()] == 'opened' or self.filestate[self.tabs.currentIndex()] == 'saved':
+        if (os.path.exists (os.path.join (self.current_proj.proj_path, 'autogen.sh')) == False
+            or os.path.exists (os.path.join (self.current_proj.proj_path,'Makefile.am')) == False
+            or os.path.exists (os.path.join (self.current_proj.proj_path,'configure.ac')) == False):
+
+            QtGui.QMessageBox.information (self, "AthenaIDE", "Cannot build project make sure all files exists", QtGui.QMessageBox.Ok)
+            return False
+
+        return True           
+    
+    def build_proj_triggered(self):
+
+        if self.mode == "Project":
+            if self.check_build_files () == False:
+                return
             
-                #try:
-                    #print 'lll'
-                    f1 = self.correctfilename(self.filepatharray[self.tabs.currentIndex()])
+            self.runcompiler.build_project(self.current_proj,self.txtarray,self.tabs,self.tracktabsarray)
+            
+    def clean_src_triggered(self):
 
-                #except IndexError:
-                #    f1 = self.correctfilename(self.current_proj.list_files[self.tabs.currentIndex()])
-                
+        curr_dir = os.cudir
+        os.chdir (self.current_proj.proj_path)       
+        
+        p = subprocess.Popen('make clean',shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        os.chdir(curr_dir)
+        
+    def clean_build_triggered (self):
+
+        curr_dir = os.cudir
+        os.chdir (self.current_proj.proj_path)
+        
+        p = subprocess.Popen('make distclean',shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        os.chdir(curr_dir)
+
+    def create_auto_tools_files_triggered(self):
+
+        if self.check_build_files () == True:
+            ask = QtGui.QMessageBox.information (self, "AthenaIDE", "All Auto Tools Files exists, Do you want to recreate them?", QtGui.QMessageBox.Yes,QtGui.QMessageBox.No)
+            if ask == QtGui.QMessageBox.No:
+                return
+
+            self.statusBar().showMessage("Building autogen.sh")
+            app.processEvents ()
+            autogen_sh_text = '''#!/bin/sh -e
+
+test -n "$srcdir" || srcdir=`dirname "$0"`
+
+test -n "$srcdir" || srcdir=.
+
+autoreconf --force --install --verbose "$srcdir"
+
+test -n "$NOCONFIGURE" || "$srcdir/configure" "$@"'''
+            f = open(os.path.join(self.current_proj.proj_path, "autogen.sh"), "w")
+            f.write(autogen_sh_text)
+            f.close()
+
+            self.statusBar().showMessage("Building configure.ac")
+            app.processEvents ()
+            
+            configure_ac_text = '''AC_INIT(%s, 0.1)
+AM_INIT_AUTOMAKE([1.11 no-define foreign])
+AC_PROG_CC
+AC_CONFIG_FILES([Makefile])
+PKG_CHECK_MODULES([DEPS], [<deps>])
+AM_SILENT_RULES([yes])
+AC_OUTPUT'''%(self.current_proj.proj_name.split (' ')[0])
+
+            f = open(os.path.join(self.current_proj.proj_path, "configure.ac"), "w")
+            f.write(configure_ac_text)
+            f.close()
+
+            files_list = os.listdir (os.path.join(self.current_proj.proj_path, "src"))
+            sources_str = ''
+            for s in files_list:
+                sources_str += 'src/'+s +' '
+
+            self.statusBar ().showMessage ("Building Makefile.am")
+            app.processEvents ()
+            
+            makefile_am_text = '''AUTOMAKE_OPTIONS = subdir-objects
+ACLOCAL_AMFLAGS = ${ACLOCAL_FLAGS}
+AM_CPPFLAGS = $(DEPS_CFLAGS)
+
+bin_PROGRAMS = %s
+%s_SOURCES = %s
+%s_LDADD = $(DEPS_LIBS) -lpthread
+dist_noinst_SCRIPTS = autogen.sh
+''' %(self.current_proj.proj_name.split (' ')[0],
+      self.current_proj.proj_name.split (' ')[0],
+      sources_str,
+      self.current_proj.proj_name.split (' ')[0])
+
+            f = open(os.path.join(self.current_proj.proj_path, "Makefile.am"), "w")
+            f.write(makefile_am_text)
+            f.close()
+
+            ask = QtGui.QMessageBox.information (self, "AthenaIDE", "Please add the dependencies in configure.ac.", QtGui.QMessageBox.Ok)
+            
+            self.statusBar ().showMessage ("Auto Tools Files created successfully")
+            app.processEvents ()
+            
+    def toolbarrun(self):
+
+        if self.mode == 'Project':
+            self.build_proj_triggered()
+            return
+
+        if self.mode == "File" and self.filestate[self.tabs.currentIndex()] == 'opened' or self.filestate[self.tabs.currentIndex()] == 'saved':            
+            f1 = self.correctfilename(self.filepatharray[self.tabs.currentIndex()])
+
         if self.filestate[self.tabs.currentIndex()] == 'new':
             ask = QtGui.QMessageBox.question(self,'Compile','Your File is not saved, file should be saved before compilation! ',QtGui.QMessageBox.Ok,QtGui.QMessageBox.Cancel)
             if ask == QtGui.QMessageBox.Ok:
@@ -2190,31 +2310,14 @@ class athena(QtGui.QMainWindow):
                 
                 try:
                     f1= self.correctfilename(self.filepatharray[self.tabs.currentIndex()])
-
                 except IndexError:
                     f1 = self.correctfilename(self.current_proj.list_files[self.tabs.currentIndex()])
         
         s,ext = self.fileandext
-        if self.mode == 'Project':
-            f1 = []
-            
-            for d in self.current_proj.list_files:
-                f1.append(self.correctfilename(d))
-            a = f1[0].split('/')
-            s = ''
-            for i in range(1,len(a)-1):
-                    s = s + '/' + a[i]
-            ext = f1[0].split('.')[1]
-            
-            if os.path.exists(self.current_proj.out_dir)==False:
-                os.mkdir(self.current_proj.out_dir)
-            self.compilefile = os.path.join(self.current_proj.out_dir,'tempfile')
-            f2 = self.compilefile
-            
+
         if self.mode == 'File':
                 
-            a = f1.split('/')
-            
+            a = f1.split('/')            
             s = ''
             for i in range(1,len(a)-1):
                 s = s + '/' + a[i]
@@ -2223,46 +2326,37 @@ class athena(QtGui.QMainWindow):
             f2 = self.compilefile
         
         if s != '':
-                if ext == 'C' or ext == 'c' or self.current_proj.proj_type == "C Project":
-                        if f2 != '':
-                            
-                            if self.mode == "File":
-                                print 'llllllll'
-                                self.runcompiler.gcccompiler_run(f1,f2,self.mode,self.txtarray,self.tabs,self.filepatharray,self.tracktabsarray)
-                            if self.mode == "Project":                                
-                                self.runcompiler.gcccompiler_run(f1,f2,self.mode,self.txtarray,self.tabs,self.current_proj.list_files,self.tracktabsarray,self.current_proj.get_compiler_command())
-                            self.runcompiler.show()
-                                                                      
-                if ext == 'CPP' or ext == 'cpp' or self.current_proj.proj_type == "C++ Project":
-                    if f2 != '':
-                        if self.mode == "File":
-                            self.runcompiler.gppcompiler_run(f1,f2,self.mode,self.txtarray,self.tabs,self.filepatharray,self.tracktabsarray,[])
-                        if self.mode == "Project":                            
-                            self.runcompiler.gppcompiler_run(f1,f2,self.mode,self.txtarray,self.tabs,self.current_proj.list_files,self.tracktabsarray,self.projCompiledTimes,self.current_proj.get_compiler_command())
-                            self.projCompiledTimes[0]+=1
-                        self.runcompiler.show()
+            if ext == 'C' or ext == 'c':
+                if f2 != '':                                                
+                    self.runcompiler.gcccompiler_run(f1,f2,self.mode,self.txtarray,self.tabs,self.filepatharray,self.tracktabsarray)            
+                    self.runcompiler.show()
+                                                                  
+            if ext == 'CPP' or ext == 'cpp':
+                if f2 != '':                    
+                    self.runcompiler.gppcompiler_run(f1,f2,self.mode,self.txtarray,self.tabs,self.filepatharray,self.tracktabsarray,[])                   
+                    self.runcompiler.show()
                                                
     def rungcccompiler(self):
         
-        f2 = ''
+        if self.mode == "Project":
+            return
         
-        if self.filestate[self.tabs.currentIndex()] == 'opened':
-            
+        f2 = ''        
+        if self.filestate[self.tabs.currentIndex()] == 'opened':            
                 try:
                     f1 = self.correctfilename(self.filepatharray[self.tabs.currentIndex()])
-
                 except IndexError:
                     f1 = self.correctfilename(self.current_proj.list_files[self.tabs.currentIndex()])
                     
                 self.compilefile = QtGui.QFileDialog.getSaveFileName(self,'Save File','')
-        if self.filestate[self.tabs.currentIndex()] == 'saved':
-            
+
+        if self.filestate[self.tabs.currentIndex()] == 'saved':            
                 try:
                     f1 = self.correctfilename(self.filepatharray[self.tabs.currentIndex()])
-
                 except IndexError:
                     f1 = self.correctfilename(self.current_proj.list_files[self.tabs.currentIndex()])
                 self.compilefile = QtGui.QFileDialog.getSaveFileName(self,'Save File','')
+
         if self.filestate[self.tabs.currentIndex()] == 'new':
             ask = QtGui.QMessageBox.question(self,'Compile','Your File is not saved, file should be saved before compilation! ',QtGui.QMessageBox.Ok,QtGui.QMessageBox.Cancel)
             if ask == QtGui.QMessageBox.Ok:
@@ -2272,67 +2366,48 @@ class athena(QtGui.QMainWindow):
                     f1= self.correctfilename(self.filepatharray[self.tabs.currentIndex()])
 
                 except IndexError:
-                    f1 = self.correctfilename(self.current_proj.list_files[self.tabs.currentIndex()])
-                
-        if self.mode == 'Project':
-                f1 = []
-                for d in self.current_proj.list_files:
-                    f1.append(self.correctfilename(d))
-                self.compilefile = QtGui.QFileDialog.getSaveFileName(self,'Save File',self.filedialogdir)
-                self.filedialogdir = self.getdir(self.compilefile)
-                
+                    f1 = self.correctfilename(self.current_proj.list_files[self.tabs.currentIndex()])               
+
         f2 = self.correctfilename(self.compilefile)
         if f2 != '':                
                 if self.mode == "File":                    
-                    self.runcompiler.gcccompiler(f1,f2,self.mode,self.txtarray,self.tabs,self.filepatharray,self.tracktabsarray)
-                if self.mode == "Project":
-                    self.runcompiler.gcccompiler(f1,f2,self.mode,self.txtarray,self.tabs,self.current_proj.list_files,self.tracktabsarray)
+                    self.runcompiler.gcccompiler(f1,f2,self.mode,self.txtarray,self.tabs,self.filepatharray,self.tracktabsarray)             
                 self.runcompiler.show()
                
     def rungppcompiler(self):
         
         f2 = ''
-        if self.mode == 'File':            
-            if self.filestate[self.tabs.currentIndex()] == 'opened':                                    
-                try:
-                    f1 = self.correctfilename(self.filepatharray[self.tabs.currentIndex()])
+        if self.mode == "Project":
+            return
+        
+        if self.filestate[self.tabs.currentIndex()] == 'opened':                                    
+            try:
+                f1 = self.correctfilename(self.filepatharray[self.tabs.currentIndex()])
 
-                except IndexError:
-                    f1 = self.correctfilename(self.current_proj.list_files[self.tabs.currentIndex()])
-                
-                self.compilefile = QtGui.QFileDialog.getSaveFileName(self,'Save File','')
-            if self.filestate[self.tabs.currentIndex()] == 'saved':                   
-                try:
-                    f1 = self.correctfilename(self.filepatharray[self.tabs.currentIndex()])
+            except IndexError:
+                f1 = self.correctfilename(self.current_proj.list_files[self.tabs.currentIndex()])
+            
+            self.compilefile = QtGui.QFileDialog.getSaveFileName(self,'Save File','')
+        if self.filestate[self.tabs.currentIndex()] == 'saved':                   
+            try:
+                f1 = self.correctfilename(self.filepatharray[self.tabs.currentIndex()])
 
-                except IndexError:
-                    f1 = self.correctfilename(self.current_proj.list_files[self.tabs.currentIndex()])
-                
-                self.compilefile = QtGui.QFileDialog.getSaveFileName(self,'Save File','')
-            if self.filestate[self.tabs.currentIndex()] == 'new':
-                ask = QtGui.QMessageBox.question(self,'Compile','Your File is not saved, file should be saved before compilation! ',QtGui.QMessageBox.Ok,QtGui.QMessageBox.Cancel)
-                if ask == QtGui.QMessageBox.Ok:
-                    self.funcsaveasfile()
-                    self.compilefile = QtGui.QFileDialog.getSaveFileName(self,'Save File',self.filedialogdir)
-                    self.filedialogdir = self.getdir(self.compilefile)
-                    f1 = self.correctfilename(self.filepatharray[self.tabs.currentIndex()])
-               
-        if self.mode == 'Project':
-                f1 = []
-                for d in self.current_proj.list_files:
-                    f1.append(self.correctfilename(d))
+            except IndexError:
+                f1 = self.correctfilename(self.current_proj.list_files[self.tabs.currentIndex()])
+            
+            self.compilefile = QtGui.QFileDialog.getSaveFileName(self,'Save File','')
+        if self.filestate[self.tabs.currentIndex()] == 'new':
+            ask = QtGui.QMessageBox.question(self,'Compile','Your File is not saved, file should be saved before compilation! ',QtGui.QMessageBox.Ok,QtGui.QMessageBox.Cancel)
+            if ask == QtGui.QMessageBox.Ok:
+                self.funcsaveasfile()
                 self.compilefile = QtGui.QFileDialog.getSaveFileName(self,'Save File',self.filedialogdir)
                 self.filedialogdir = self.getdir(self.compilefile)
+                f1 = self.correctfilename(self.filepatharray[self.tabs.currentIndex()])
+               
         f2 = self.correctfilename(self.compilefile)
         
         if f2 != '':
-            if self.mode == "File":
-                self.runcompiler.gppcompiler(f1,f2,self.mode,self.txtarray,self.tabs,self.filepatharray,self.tracktabsarray)
-                
-            if self.mode == "Project":
-                
-                self.runcompiler.gppcompiler(f1,f2,self.mode,self.txtarray,self.tabs,self.current_proj.list_files,self.tracktabsarray,self.projCompiledTimes)
-                
+            self.runcompiler.gppcompiler(f1,f2,self.mode,self.txtarray,self.tabs,self.filepatharray,self.tracktabsarray)                
             self.runcompiler.show()
            
     def correctfilename(self,fname):
@@ -2940,10 +3015,10 @@ class athena(QtGui.QMainWindow):
             if ext == 'c' or ext =='C':
                 if self.mode == 'File':
                     self.txtarray[self.tabs.currentIndex()].show_combo_boxes('C File')
+                    highlight = syntaxc.CHighlighter(self.txtarray[self.tabs.currentIndex()].txtInput.document())
                 if self.mode == 'Project':
                     self.txtarray[self.tabs.currentIndex()].show_combo_boxes('C Project')
-                txtInput.fill_c_code_completion()
-                highlight = syntaxc.CHighlighter(self.txtarray[self.tabs.currentIndex()].txtInput.document())
+                txtInput.fill_c_code_completion()                
                 self.addtoencodingarray(self.tabs.currentIndex(),'C')               
             else:
                 if ext == 'cpp' or ext =='CPP':

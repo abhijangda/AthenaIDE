@@ -156,12 +156,14 @@ class compilerclass(QtGui.QDialog):
         except IndexError:
             line_number = 1
         filename = text[0:text.find(":")]
+        if filename.find('/') != -1:
+            filename = filename[filename.find('/')+1:]
         
-        for i in range(len(self.filepatharray)):            
-                if self.filepatharray[i] == filename:
-                    break
-            
-        if i != len(self.filepatharray):            
+        for i in range(len(self.txtinputarray)):
+            if self.txtinputarray[i].filename == filename:
+                break
+        
+        if i != len(self.txtinputarray):            
             if self.tabstrackarray == []:
                 self.tabs.setCurrentIndex(i)
                 cc = self.txtinputarray[i].txtInput.textCursor()
@@ -212,23 +214,13 @@ class compilerclass(QtGui.QDialog):
             self.txtinputarray = txtinputarray
             self.tabs = tabs
             self.filepatharray = filepatharray
-            self.tabstrackarray = tabstrackarray
-            
-            if mode == 'Project':
-                cmd = command
-                d=''
-                for s in filename:
-                    if '.h' not in s:
-                        d += ' ' + str(s)
-                cmd = cmd.replace('<input>',d)
-                cmd = cmd.replace('<output>',str(compilefilename))                
+            self.tabstrackarray = tabstrackarray           
             
             if mode == 'File':
                 cmd = self.gcccommand
                 cmd=cmd.replace('<input>',str(filename))
                 cmd=cmd.replace('<output>',str(compilefilename))
                 self.lblsource.setText(filename)
-            print cmd
             
             if cmd !='':            
                 self.compilefilename = compilefilename
@@ -242,6 +234,92 @@ class compilerclass(QtGui.QDialog):
         else:        
             msg_box = QtGui.QMessageBox.information(self,'GNU C Compiler','Please set command for GNU C Compiler',QtGui.QMessageBox.Ok)
 
+    def build_project(self,project,txtinputarray,tabs,tabstrackarray):
+
+        if project.proj_path !="":
+            self.project = project
+            self.autogen_path = os.path.join(project.proj_path,"autogen.sh")
+            self.configure_path = os.path.join(project.proj_path,"configure.ac")
+            self.makefileam_path = os.path.join(project.proj_path,"Makefile.am")
+            
+            self.txtinputarray = txtinputarray
+            self.tabs = tabs            
+            
+            self.tabstrackarray = tabstrackarray
+            
+            thread = Thread(self.begin_build,self.build_callback)
+            thread.start()
+            
+            compiler = ""
+            f = open (self.configure_path, "r")
+            s = f.read ()
+            f.close ()
+            
+            if s.find ("AC_PROG_CC")!=-1:
+                compiler = "GNU C Compiler(GCC) "
+            if s.find ("AC_PROG_CXX")!=-1:
+                compiler += "GNU C++ Compiler(G++)"
+            self.lblcompiler.setText (compiler)
+            compilefilename = ""
+            
+            f = open (self.makefileam_path, "r")
+            s = f.read ()
+            f.close ()
+                    
+            compilefilename = s [s.find ("bin_PROGRAMS")+len ("bin_PROGRAMS"):]
+            compilefilename = compilefilename [:compilefilename.find ('\n')].replace ('=', '').strip ()            
+            self.compilefilename = os.path.join (project.proj_path, compilefilename.split (' ') [0])           
+            self.lblcompiled.setText(self.compilefilename)
+            self.listerroutput.clear()
+            self.listerroutput.addItem('Compiling Please Wait...')
+            self.show()
+                
+    def begin_build(self):
+
+        if self.autogen_path != '':
+            curr_dir = os.curdir
+            os.chdir(self.project.proj_path)
+            p = subprocess.Popen(self.autogen_path,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            self.output = unicode(p.stderr.read(),'utf-8')            
+            self.status = 0
+            
+            if self.output.find('configure: error: source directory already configured; run "make distclean" there first') != -1:
+                p = subprocess.Popen('make distclean',shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+                p = subprocess.Popen(self.autogen_path,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+                self.output = unicode(p.stderr.read(),'utf-8')
+                if self.output.find('error:')==-1:
+                    self.status = 0
+            elif self.output.find('error:')!=-1:
+                self.status = 1
+                
+            if self.status == 0:               
+                p = subprocess.Popen('make',shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)                
+                self.output = unicode(p.stderr.read(),'utf-8')
+
+            os.chdir(curr_dir)
+
+    def build_callback(self):
+
+        if self.output == '':
+            self.showerroutput('Compilation Successful')
+            #self.compilefilename = compilefilename   
+            self.cmdRun.setEnabled(True)
+            if self.run_automatically==True:
+                self.run()
+                self.run_automatically=False
+            if self.run_debug_automatically==True:
+                self.run_debug()
+                self.run_debug_automatically=False
+                
+        else:
+            if 'warning' in self.output and 'error' not in self.output:
+                self.cmdRun.setEnabled(True)                
+                self.showerroutput(self.output)        
+            else:
+                self.parent.compilefile = ''
+                self.cmdRun.setDisabled(True)
+                self.showerroutput(self.output)
+        
     def callback(self,cmd,compilefilename):
 
         if cmd.find('-o')!=-1:
@@ -264,47 +342,16 @@ class compilerclass(QtGui.QDialog):
                 else:
                     self.parent.compilefile = ''
                     self.cmdRun.setDisabled(True)
-                    self.showerroutput(self.output)
-                    
-        else:
-            if cmd.find('-c')!=-1:
-                if self.output == '':                                 
-                    for i,x in enumerate(self.txtinputarray):
-                        x.txtInput.setisDirty(False)
-                    directory = compilefilename[:compilefilename.rindex('/')]
-                    list_dir = os.listdir(directory)
-                    commandsplit = self.proj_command.split(' ')
-                    cmd=''
-                    for d in commandsplit:
-                        if d == '<input>':
-                            for s in list_dir:
-                                if s.find('.o')!=-1:
-                                    cmd = cmd + ' ' + directory+'/'+str(s)                                    
-                        if d == '<output>':
-                            cmd = cmd + ' ' + str(compilefilename)                        
-                        if d != '<input>' and d != '<output>':
-                            cmd = cmd + ' ' + d
-                    print cmd
-                    thread = Thread(self.runcompiler,self.callback,[cmd,compilefilename])
-                    thread.start()
-                    self.compilefilename = compilefilename            
-                    self.cmdRun.setEnabled(False)
-                else:
-                    if 'warning' in self.output and 'error' not in self.output:
-                        self.cmdRun.setEnabled(True)
-                        self.compilefilename = compilefilename
-                        self.showerroutput(self.output)        
-                    else:                        
-                        self.parent.compilefile = ''
-                        self.cmdRun.setDisabled(True)
-                        self.showerroutput(self.output)            
+                    self.showerroutput(self.output)     
         
     def runcompiler(self,cmd,compilefilename):
 
         #print "running compiler with command " + cmd
         self.olddir = os.getcwd()
-        os.chdir(compilefilename[:compilefilename.rindex('/')+1])
-        print cmd
+        compile_file_dir = compilefilename.replace('\\','')
+        compile_file_dir = compile_file_dir[:compile_file_dir.rindex('/')+1]
+        os.chdir(compile_file_dir)
+        
         p = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         self.output = unicode(p.stderr.read(),'utf-8')
         if self.olddir !='':
@@ -335,54 +382,19 @@ class compilerclass(QtGui.QDialog):
             self.filepatharray = filepatharray
             self.tabstrackarray = tabstrackarray
             
-            if mode == 'Project':
-                commandsplit=command.split(' ')
-                self.proj_command =command
-                for d in commandsplit:
-                    if d == '<input>':
-                        cmd_lib_old=cmd_lib
-                        for s in filename:
-                            cmd = cmd + ' ' + str(s)
-                            cmd_lib = cmd_lib + ' ' + str(s)
-                        if projtimes[0]==0:
-                            directory = filename[0][:filename[0].rindex('/')]
-                            list_dir = os.listdir(directory)
-                            for i,x in enumerate(list_dir):
-                                if x.find(".h.gch")!=-1 or x.find(".o")!=-1:
-                                    os.remove( os.path.join(directory,list_dir[i]))
-                                    
-                        if projtimes[0]>0:
-                            cmd_lib=cmd_lib_old
-                            for i,x in enumerate(txtinputarray):
-                                if x.txtInput.getisDirty() == True:                        
-                                    cmd_lib = cmd_lib + ' ' +str(filepatharray[tabstrackarray[i]])
-                            
-                    if d == '<output>':
-                        cmd = cmd + ' ' + str(compilefilename)                        
-                    if d != '<input>' and d != '<output>':
-                        cmd = cmd + ' ' + d
-                        cmd_lib = cmd_lib + ' ' +d
-                cmd_lib = cmd_lib.replace('-o','-c')                
-
-            if mode == 'File':
-                for d in commandsplit:
-                    if d == '<input>':
-                        cmd = cmd + ' ' + str(filename)
-                    if d == '<output>':
-                        cmd = cmd + ' ' + str(compilefilename)
-                    if d != '<input>' and d != '<output>':
-                        cmd = cmd + ' ' + d
-                self.lblsource.setText(filename)
+            for d in commandsplit:
+                if d == '<input>':
+                    cmd = cmd + ' ' + str(filename)
+                if d == '<output>':
+                    cmd = cmd + ' ' + str(compilefilename)
+                if d != '<input>' and d != '<output>':
+                    cmd = cmd + ' ' + d
+            self.lblsource.setText(filename)
             self.compilefilename = compilefilename
+            
             if cmd != '':
-                
-                if mode== 'File':
-                    thread = Thread(self.runcompiler,self.callback,[cmd,compilefilename])
-                    thread.start()                    
-                else:                                     
-                    thread = Thread(self.runcompiler,self.callback,[cmd_lib,compilefilename])
-                    thread.start()                   
-                        
+                thread = Thread(self.runcompiler,self.callback,[cmd,compilefilename])
+                thread.start()                        
                 self.lblcompiler.setText('GNU C++ Compiler(G++)')
                 self.listerroutput.clear()
                 self.lblcompiled.setText(self.compilefilename)
