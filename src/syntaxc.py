@@ -1,6 +1,6 @@
 #209 Lines
 
-import sys
+import sys, re
 from PyQt4.QtCore import QRegExp
 from PyQt4.QtGui import QColor, QTextCharFormat, QFont, QSyntaxHighlighter
 
@@ -64,7 +64,7 @@ class CHighlighter (QSyntaxHighlighter):
     braces = [
         '\{', '\}', '\(', '\)', '\[', '\]',
     ]
-    def __init__(self, document):
+    def __init__(self, document, main_win):
         QSyntaxHighlighter.__init__(self, document)
 
         # FIXME: The triple-quotes in these two lines will mess up the
@@ -80,7 +80,15 @@ class CHighlighter (QSyntaxHighlighter):
         self.document = document
 
         self.list_multi_line_comment_pos = []
-
+        
+        self.gtk_enabled = None
+        self.gtk_struct_str = ''
+        if main_win.gtk_support_structs == None:
+            self.gtk_enabled = False
+        else:
+            self.gtk_enabled = True
+            self.gtk_struct_str = main_win.gtk_support_structs.all_structs_str
+        
     def build_rules(self):
 
         self.multiline_comment = (QRegExp("/\*"),QRegExp("\*/"), 1, STYLES['comment'])
@@ -129,16 +137,23 @@ class CHighlighter (QSyntaxHighlighter):
             r = self.rules
         except AttributeError:
             self.build_rules()
-        for expression, nth, format in self.rules:
+        for expression, nth, _format in self.rules:
             index = expression.indexIn(text, 0)                
             while index >= 0:
                 # We actually want the index of the nth match
                 index = expression.pos(nth)
                 length = expression.cap(nth).length()
-                self.setFormat(index, length, format)
+                self.setFormat(index, length, _format)
                 index = expression.indexIn(text, index + length)
                 
         self.setCurrentBlockState(0)
+
+        if self.gtk_enabled == True:
+            
+            for search_iter in re.finditer (r'\w+', str(text)):
+                if re.findall (r'\b%s\b' % (search_iter.group ()), self.gtk_struct_str) != []:                    
+                    self.setFormat (search_iter.start(), search_iter.end () - search_iter.start (), format ('darkRed'))
+                    
         in_multiline = self.match_multiline(text, *self.multiline_comment)       
 
     def match_multiline(self,text,delimiter_start,delimiter_end,in_state,style):

@@ -152,6 +152,7 @@ class txtInputclass(QtGui.QTextEdit):
         self.xcfr=0
         self.hidden_text_array=[]
         self.runToPlainText=0
+        self.main_win = parent.parent
         
         try:            
             settings = ''
@@ -605,10 +606,7 @@ class txtInputclass(QtGui.QTextEdit):
                             should_continue = True
                             break
                     if should_continue==True:
-                        continue
-                    
-                    print d,func.name
-                        
+                        continue                       
                     
                     self.curr_file_func_array.append(func)                    
                     self.parent.combo_funcposarray.append(search_iter.start())
@@ -1137,9 +1135,14 @@ class txtInputclass(QtGui.QTextEdit):
                         k=1
                         
                         indentct -= 1
+                        cc.movePosition(QTextCursor.StartOfLine, QTextCursor.MoveAnchor)                            
+                        if line.count (' ') >= len(self.indentwidth):                                
+                            for i in range (len(self.indentwidth)):
+                                cc.deleteChar ()
+                        cc.movePosition(QTextCursor.EndOfLine,QTextCursor.MoveAnchor)
                         if indentct == 0:
                             QtGui.QTextEdit.keyPressEvent(self,event)
-                        else:
+                        else:                            
                             QtGui.QTextEdit.keyPressEvent(self,event)
                             cc.movePosition(QTextCursor.StartOfLine, QTextCursor.MoveAnchor)
                             for i in range(0,indentct):
@@ -1410,6 +1413,9 @@ class txtInputclass(QtGui.QTextEdit):
                         if word == typedef.name[0:len(word)]:
                             include_func_match_list.append(typedef.name)
 
+                include_func_match_list += self.main_win.gtk_support_structs.get_all_struct_with_str (word)
+                include_func_match_list += self.main_win.gtk_support_defines.get_all_define_with_str (word)
+                
                 for _object in self.list_objects+self.list_references+self.list_pointers:
                     if word == _object.name[0:len(word)]:                                
                         x1,y1,x2,y2 = self.cursorRect().getCoords()
@@ -1417,14 +1423,15 @@ class txtInputclass(QtGui.QTextEdit):
                         self.funcmatchlist.setVisible(True)                                
                         self.funcmatchlist.addItem(_object.getDeclaration())
 
+                if self.main_win.current_proj.proj_gtk_type == "gtk+":
+                    include_func_match_list += self.main_win.gtk_support_functions.get_similar_funcs (word)
                 
                 if include_func_match_list!=[]:
                     x1,y1,x2,y2 = self.cursorRect().getCoords()
                     self.funcmatchlist.setGeometry(x2,y2,250,160)
                     self.funcmatchlist.setVisible(True)
                     for string in include_func_match_list:
-                        self.funcmatchlist.addItem(string)
-                    
+                        self.funcmatchlist.addItem(string)                
             else:                    
                 ##For C++ Projects and C++ Files
                 
@@ -1461,7 +1468,7 @@ class codewidget(QtGui.QWidget):
     def __init__(self,projtype,parent=None):
 
         QtGui.QWidget.__init__(self,parent)
-        
+        self.parent = parent
         self.vbox = QtGui.QVBoxLayout(self)
         self.txtInput = txtInputclass(projtype,self)        
 

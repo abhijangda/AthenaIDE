@@ -224,8 +224,8 @@ class compilerclass(QtGui.QDialog):
             
             if cmd !='':            
                 self.compilefilename = compilefilename
-                thread = Thread(self.runcompiler,self.callback,[cmd,compilefilename])
-                thread.start()
+                self.thread = Thread(self.runcompiler,self.callback,[cmd,compilefilename])
+                self.thread.start()
                 self.lblcompiler.setText('GNU C Compiler(GCC)')
                 self.lblcompiled.setText(self.compilefilename)
                 self.listerroutput.clear()
@@ -247,8 +247,8 @@ class compilerclass(QtGui.QDialog):
             
             self.tabstrackarray = tabstrackarray
             
-            thread = Thread(self.begin_build,self.build_callback)
-            thread.start()
+            self.thread = Thread(self.begin_build,self.build_callback)
+            self.thread.start()
             
             compiler = ""
             f = open (self.configure_path, "r")

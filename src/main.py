@@ -14,6 +14,7 @@ from PyQt4.Qt import QSyntaxHighlighter,QTextCursor,QPoint
 from time import strftime
 import os,threading,pty,termios,fcntl
 global app
+from gtk_support import *
 
 class ReadFileThread(QtCore.QThread):
 
@@ -91,7 +92,10 @@ class athena(QtGui.QMainWindow):
         self.encodingarray = []
         self.wordwrap = ''
         self.mode = ''
-
+        self.gtk_support_functions = None
+        self.gtk_support_defines = None
+        self.gtk_support_structs = None
+                
         self.list_gdb_commands=[]
         self.list_breakpoints=[]
         self.current_proj=project_class.project("","","")
@@ -516,6 +520,8 @@ class athena(QtGui.QMainWindow):
         clear_bookmark.setShortcut(QtCore.Qt.CTRL+QtCore.Qt.Key_Delete)
         clear_bookmark.setStatusTip('Clear all bookmarks')
         self.bookmark_actiongroup = QtGui.QActionGroup(self)
+
+        go_to_func_def = QtGui.QAction ('Go to Function Definition',self)        
         
         self.bookmark_menu_item_array = []
         self.bookmark_line_array = []
@@ -531,12 +537,13 @@ class athena(QtGui.QMainWindow):
         self.navigationmenu.addAction(gotoline)
         self.navigationmenu.addSeparator()
         self.navigationmenu.addAction(go_to_matching_brace)
+        self.navigationmenu.addAction(go_to_func_def)
         self.navigationmenu.addSeparator()
         self.navigationmenu.addAction(add_bookmark)
         self.navigationmenu.addAction(next_bookmark)
         self.navigationmenu.addAction(prev_bookmark)
         self.navigationmenu.addAction(clear_bookmark)
-        self.navigationmenu.addSeparator()
+        self.navigationmenu.addSeparator()        
 
         projectmenu = menubar.addMenu('&Project')
         projectmenu.addAction(newprojectaction)        
@@ -563,6 +570,7 @@ class athena(QtGui.QMainWindow):
         self.connect(prev_bookmark,QtCore.SIGNAL('triggered()'),self.funcprevbookmark)
         self.connect(next_bookmark,QtCore.SIGNAL('triggered()'),self.funcnextbookmark)
         self.connect(clear_bookmark,QtCore.SIGNAL('triggered()'),self.funcclearbookmark)
+        self.connect (go_to_func_def, QtCore.SIGNAL ('triggered()'), self.go_to_func_def_triggered)
         
         buildmenu = menubar.addMenu('&Build')
 
@@ -808,7 +816,7 @@ class athena(QtGui.QMainWindow):
                 self.gppcommand = self.gppcommand + settings[i]
 
             if self.defaultencoding == 'C':
-                highlight = syntaxc.CHighlighter(self.txtarray[0].txtInput.document())
+                highlight = syntaxc.CHighlighter(self.txtarray[0].txtInput.document(), self)
                 
             if self.defaultencoding == 'C++':
                 highlight = syntaxcpp.CPPHighlighter(self.txtarray[0].txtInput.document())
@@ -1289,7 +1297,19 @@ class athena(QtGui.QMainWindow):
                 pos-=1
         cc.setPosition(pos,cc.MoveAnchor)
         self.txtarray[self.tabs.currentIndex()].txtInput.setTextCursor(cc)
-            
+
+    def go_to_func_def_triggered (self):
+
+        textInput = self.txtarray[self.tabs.currentIndex()].txtInput
+        cc = textInput.textCursor()
+        func_name = str (cc.selectedText ())
+        for i,func in enumerate (textInput.curr_file_func_array):
+            if func_name == func.name:
+                self.txtarray [self.tabs.currentIndex ()].combo_func_item_activated (i)
+                return
+
+        self.statusBar ().showMessage ('Cannot find the required func in the file')
+        
     def funcbackline(self):
 
         txtInput = self.txtarray[self.tabs.currentIndex()].txtInput
@@ -1825,7 +1845,13 @@ class athena(QtGui.QMainWindow):
             for i in range(0,len(list_proj_files)):
                 self.projtreeitemarray.append(QtGui.QTreeWidgetItem(self.projectTreeItem))
                 self.projtreeitemarray[i].setText(0,self.getprojfilename(list_proj_files[i]))
-            
+
+            if self.current_proj.proj_gtk_type == 'gtk+':
+                
+                self.gtk_support_functions = gtk_functions ()
+                self.gtk_support_defines = gtk_defines ()
+                self.gtk_support_structs = gtk_structs ()
+                
             self.addnew.setEnabled(True)
             self.addexisting.setEnabled(True)
             
@@ -1877,24 +1903,25 @@ class athena(QtGui.QMainWindow):
         docstr = self.readProjFileThread.file_string
         
         txtInput = self.txtarray[self.tabs.count()-1].txtInput
-        txtInput.setPlainText(docstr)
+        
         self.txtarray[self.tabs.count() - 1].show_combo_boxes(self.current_proj.proj_type)            
         self.tracktabsarray.append(self.index)#Here self.tracktabsarray stores the index of file and self.tracktabsindex[self.tabs.currentIndex()] will give the index of tabs which displays the file.
         #or you can say index of file in projfilepatharray = self.tracktabsarray[self.tabs.currentIndex()}
        
-        if ext == 'c' or ext=='C' or self.current_proj.proj_type == 'C Project':
-            
-            highlight = syntaxc.CHighlighter(self.txtarray[self.tabs.count()-1].txtInput.document())            
+        if ext == 'c' or ext=='C' or self.current_proj.proj_type == 'C Project':            
+            highlight = syntaxc.CHighlighter(self.txtarray[self.tabs.count()-1].txtInput.document(),self)
+            txtInput.setPlainText(docstr)
             txtInput.fill_c_code_completion()
             self.addtoencodingarray(self.tabs.count()-1,'C') 
         else:
             if ext == 'cpp' or ext =='CPP' or self.current_proj.proj_type == 'C++ Project':                
-                highlight = syntaxcpp.CPPHighlighter(self.txtarray[self.tabs.count()-1].txtInput.document())                
+                highlight = syntaxcpp.CPPHighlighter(self.txtarray[self.tabs.count()-1].txtInput.document())
+                txtInput.setPlainText(docstr)
                 txtInput.fill_cpp_code_completion()                    
                 self.addtoencodingarray(self.tabs.count()-1,'C++') 
             else:
                 self.addtoencodingarray(self.tabs.count()-1,'PlainText') 
-
+        
         self.filestate.append('opened')       
             
         if self.wordwrap == 'False':
@@ -1968,8 +1995,10 @@ class athena(QtGui.QMainWindow):
                 
             if self.current_proj.proj_type == "GTK+ Project":
                 self.current_proj.proj_type="C Project"
+                self.proj_gtk_type = 'gtk+'
                 self.current_proj.other_args="`pkg-config --cflags --libs gtk+-2.0 gtksourceview-2.0 vte`"
             elif self.current_proj.proj_type == "gtkmm Project":
+                self.proj_gtk_type = 'gtkmm'
                 self.current_proj.proj_type="C++ Project"
                 self.current_proj.other_args="`pkg-config gtkmm-2.4 --cflags --libs gtksourceviewmm-2.0 libvtemm-1.2`"
                 
@@ -2002,7 +2031,7 @@ class athena(QtGui.QMainWindow):
         txtInput.setDocument(doc)
         
         if encoding == 'C':
-            highlight = syntaxc.CHighlighter(txtInput.document())
+            highlight = syntaxc.CHighlighter(txtInput.document(), self)
         else:
             if encoding=='C++':
                 highlight = syntaxcpp.CPPHighlighter(txtInput.document())
@@ -2251,14 +2280,23 @@ test -n "$NOCONFIGURE" || "$srcdir/configure" "$@"'''
 
             self.statusBar().showMessage("Building configure.ac")
             app.processEvents ()
+
+            compiler_type = ''
+            makefile_compiler_flag = ''
+            if self.current_proj.proj_type == 'C Project':
+                compiler_type = 'AC_PROG_CC'
+                makefile_compiler_flag = 'CCFLAGS'
+            else:
+                compiler_type = 'AC_PROG_CXX'
+                makefile_compiler_flag = 'CXXFLAGS'
             
             configure_ac_text = '''AC_INIT(%s, 0.1)
 AM_INIT_AUTOMAKE([1.11 no-define foreign])
-AC_PROG_CC
+%s
 AC_CONFIG_FILES([Makefile])
 PKG_CHECK_MODULES([DEPS], [<deps>])
 AM_SILENT_RULES([yes])
-AC_OUTPUT'''%(self.current_proj.proj_name.split (' ')[0])
+AC_OUTPUT'''%(self.current_proj.proj_name.split (' ')[0],compiler_type)
 
             f = open(os.path.join(self.current_proj.proj_path, "configure.ac"), "w")
             f.write(configure_ac_text)
@@ -2271,6 +2309,7 @@ AC_OUTPUT'''%(self.current_proj.proj_name.split (' ')[0])
 
             self.statusBar ().showMessage ("Building Makefile.am")
             app.processEvents ()
+
             
             makefile_am_text = '''AUTOMAKE_OPTIONS = subdir-objects
 ACLOCAL_AMFLAGS = ${ACLOCAL_FLAGS}
@@ -2278,13 +2317,15 @@ AM_CPPFLAGS = $(DEPS_CFLAGS)
 
 bin_PROGRAMS = %s
 %s_SOURCES = %s
+%s_%s = %s
 %s_LDADD = $(DEPS_LIBS) -lpthread
 dist_noinst_SCRIPTS = autogen.sh
 ''' %(self.current_proj.proj_name.split (' ')[0],
       self.current_proj.proj_name.split (' ')[0],
-      sources_str,
+      sources_str, self.current_proj.proj_name.split (' ')[0],
+      makefile_compiler_flag, self.current_proj.get_compiler_flags(),
       self.current_proj.proj_name.split (' ')[0])
-
+            
             f = open(os.path.join(self.current_proj.proj_path, "Makefile.am"), "w")
             f.write(makefile_am_text)
             f.close()
@@ -2490,7 +2531,7 @@ dist_noinst_SCRIPTS = autogen.sh
                     self.txtarray[i].txtInput.setLineWrapMode(QtGui.QTextEdit.WidgetWidth)        
                 
                 if self.defaultencoding == 'C':
-                    highlight = syntaxc.CHighlighter(self.txtarray[i].txtInput.document())
+                    highlight = syntaxc.CHighlighter(self.txtarray[i].txtInput.document(), self)
                 
                 if self.defaultencoding == 'C++':
                     highlight = syntaxcpp.CPPHighlighter(self.txtarray[i].txtInput.document())
@@ -2599,7 +2640,7 @@ dist_noinst_SCRIPTS = autogen.sh
         txtInput.setDocument(doc)
         
         if self.defaultencoding == 'C':
-            highlight = syntaxc.CHighlighter(txtInput.document())
+            highlight = syntaxc.CHighlighter(txtInput.document(), self)
             self.addtoencodingarray(self.tabs.count(),'C')
             
         else:
@@ -2796,18 +2837,20 @@ dist_noinst_SCRIPTS = autogen.sh
         doc = QtGui.QTextDocument(txtInput)
         doc.setDefaultFont(txtInput.currentFont())
         txtInput.setDocument(doc)        
-        txtInput.setPlainText(docstr)
+        
         if ext == 'c' or ext=='C':
             self.txtarray[self.tabs.currentIndex()].show_combo_boxes('C File')
             txtInput.setFileType('C File')
+            txtInput.setPlainText(docstr)
             txtInput.fill_c_code_completion()            
-            highlight = syntaxc.CHighlighter(self.txtarray[self.tabs.currentIndex()].txtInput.document())
+            highlight = syntaxc.CHighlighter(self.txtarray[self.tabs.currentIndex()].txtInput.document(), self)
             self.addtoencodingarray(self.tabs.currentIndex(),'C') 
         else:
             if ext == 'cpp' or ext =='CPP':
                 #Remember to add fill_c_code_completion like function for C++
                 txtInput.setFileType('C++ File')
                 self.txtarray[self.tabs.currentIndex()].show_combo_boxes('C++ File')
+                txtInput.setPlainText(docstr)
                 txtInput.fill_cpp_code_completion()
                 highlight = syntaxcpp.CPPHighlighter(self.txtarray[self.tabs.currentIndex()].txtInput.document())
                 self.addtoencodingarray(self.tabs.currentIndex(),'C++') 
@@ -2817,7 +2860,8 @@ dist_noinst_SCRIPTS = autogen.sh
                     self.addtoencodingarray(self.tabs.currentIndex(),self.defaultencoding)
                 else:
                     self.addtoencodingarray(self.tabs.currentIndex(),'PlainText')
-                
+
+        
         #self.projectdock.close()
         self.tabs.show()
         self.filestate[self.tabs.currentIndex()] = 'opened'
@@ -3015,7 +3059,7 @@ dist_noinst_SCRIPTS = autogen.sh
             if ext == 'c' or ext =='C':
                 if self.mode == 'File':
                     self.txtarray[self.tabs.currentIndex()].show_combo_boxes('C File')
-                    highlight = syntaxc.CHighlighter(self.txtarray[self.tabs.currentIndex()].txtInput.document())
+                    highlight = syntaxc.CHighlighter(self.txtarray[self.tabs.currentIndex()].txtInput.document(), self)
                 if self.mode == 'Project':
                     self.txtarray[self.tabs.currentIndex()].show_combo_boxes('C Project')
                 txtInput.fill_c_code_completion()                
@@ -3046,7 +3090,7 @@ dist_noinst_SCRIPTS = autogen.sh
                                 self.txtarray[self.tabs.currentIndex()].show_combo_boxes('C Project')
                             
                             txtInput.fill_c_code_completion()
-                            highlight = syntaxc.CHighlighter(self.txtarray[self.tabs.currentIndex()].txtInput.document())
+                            highlight = syntaxc.CHighlighter(self.txtarray[self.tabs.currentIndex()].txtInput.document(), self)
                             self.addtoencodingarray(self.tabs.currentIndex(),self.defaultencoding)
 
                     else:
@@ -3142,7 +3186,7 @@ dist_noinst_SCRIPTS = autogen.sh
         self.mode = 'File'
         self.tabs.show()
         if self.defaultencoding == 'C':
-                highlight = syntaxc.CHighlighter(txtInput.document())
+                highlight = syntaxc.CHighlighter(txtInput.document(), self)
                 
         if self.defaultencoding == 'C++':
                 highlight = syntaxcpp.CPPHighlighter(txtInput.document())

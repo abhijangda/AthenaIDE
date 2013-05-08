@@ -24,7 +24,8 @@ class project(object):
         self.list_files=[]
         self.proj_file = proj_file
         self.proj_path = proj_file[:proj_file.rfind("/")]
-        self.proj_type=proj_type
+        self.proj_type = proj_type
+        self.proj_gtk_type = ''
         self.compile_only=False
         self.disable_inline=False
         self.define_symbols=False
@@ -61,7 +62,6 @@ class project(object):
 
     def write_to_file(self):
 
-
         proj_str = self.get_proj_str()
         if self.proj_file=="":
             if self.proj_type=="C Project":
@@ -76,7 +76,9 @@ class project(object):
     def get_proj_str(self):
 
         proj_str=""
-        proj_str = "<name>"+self.proj_name+"</name>\n"+"<type>"+self.proj_type+"</type>\n"+"<path>"+self.proj_path+"</path>\n"
+        proj_str = "<name>"+self.proj_name+"</name>\n"+"<type>"+self.proj_type+"</type>\n"
+        proj_str += '<proj_gtk_type>' + self.proj_gtk_type + '</proj_gtk_type>'
+        proj_str += "<path>"+self.proj_path+"</path>\n"
         for _file in self.list_files:
             proj_str+="<file>"+_file+"</file>\n"
         
@@ -112,6 +114,7 @@ class project(object):
     def clear(self):
 
         self.proj_name = ""
+        self.proj_gtk_type = ""
         self.list_files=[]
         self.proj_file = ""
         self.proj_path = ""
@@ -146,6 +149,10 @@ class project(object):
         pos_start = string.find("<type>")+6
         pos_end = string.find("</type>")    
         self.proj_type = string[pos_start:pos_end]      
+
+        pos_start = string.find ('<proj_gtk_type>') + len('<proj_gtk_type>')
+        pos_end = string.find ('</proj_gtk_type>')
+        self.proj_gtk_type = string [pos_start:pos_end]
         
         pos_start = string.find("<location>")+10
         pos_end=string.find("</location>")
@@ -198,13 +205,11 @@ class project(object):
             pos_end = 0
             pos_start=string.find("<dir>",pos_start+1)
             pos_end=string.find("</dir>",pos_end+1)
-            while pos_start!=-1 and pos_end!=-1:
-                print string[pos_start+5:pos_end]
+            while pos_start!=-1 and pos_end!=-1:                
                 self.list_dir.append(string[pos_start+5:pos_end])
                 pos_start=string.find("<dir>",pos_start+1)
                 pos_end=string.find("</dir>",pos_end+1)
 
-            print self.list_dir
         pos_start = string.find("<define_symbols>")+16
         pos_end=string.find("</define_symbols>")
         self.define_symbols=str_to_bool(string[pos_start:pos_end])
@@ -250,7 +255,6 @@ class project(object):
 
         command = ''
         if self.proj_type == 'C++ Project':
-
             command = 'g++ '
         else:
             command = 'gcc '
@@ -278,9 +282,17 @@ class project(object):
         if self.optimize==True:
             command += ' -O'+str(self.optimize_level)
 
-        print command
         return command
-        
+
+    def get_compiler_flags(self):
+
+        s = self.get_compiler_command()
+        s = s.replace('<input> -o <output>','')        
+        s = s.replace('gcc','')
+        s = s.replace('g++','')
+        s = s.replace(s[s.find('`pkg-config'):s.find('`')],'')
+        return s
+    
     def write(self):
 
         try:
