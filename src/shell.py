@@ -101,6 +101,7 @@ class shell(QtGui.QMainWindow):
             filename = sys.argv[1]
             for i in range(2,len(sys.argv)):
                 filename += ' ' + sys.argv[i]
+            print sys.argv[1]
             os.write(self.fd,sys.argv[1]+'\n')            
             
     def readOutput(self,string):

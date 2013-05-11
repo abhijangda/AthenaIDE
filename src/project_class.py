@@ -77,7 +77,8 @@ class project(object):
 
         proj_str=""
         proj_str = "<name>"+self.proj_name+"</name>\n"+"<type>"+self.proj_type+"</type>\n"
-        proj_str += '<proj_gtk_type>' + self.proj_gtk_type + '</proj_gtk_type>'
+        print self.proj_gtk_type+" FFFFF"
+        proj_str += '<proj_gtk_type>' + self.proj_gtk_type + '</proj_gtk_type>\n'
         proj_str += "<path>"+self.proj_path+"</path>\n"
         for _file in self.list_files:
             proj_str+="<file>"+_file+"</file>\n"
@@ -167,9 +168,9 @@ class project(object):
             pos_start=string.find("<file>",pos_start+1)
             pos_end=string.find("</file>",pos_end+1)
             
-        pos_start = string.find("<run_on_ext_console>")+20
-        pos_end=string.find("</run_on_ext_console>")
-        self.run_on_ext_console=str_to_bool(string[pos_start:pos_end-pos_start])       
+        pos_start = string.find("<run_on_ext_console>")+len ('<run_on_ext_console>')
+        pos_end = string.find("</run_on_ext_console>")
+        self.run_on_ext_console=str_to_bool(string[pos_start:pos_end])       
         
         pos_start = string.find("<optimize>")+10
         pos_end=string.find("</optimize>")

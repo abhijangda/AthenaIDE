@@ -1404,14 +1404,20 @@ class athena(QtGui.QMainWindow):
                         self.projtreeitemarray.append(QtGui.QTreeWidgetItem(self.projectTreeItem))
                         self.projtreeitemarray[len(self.projtreeitemarray)-1].setText(0,self.getprojfilename(newprojfilepatharray[len(self.projtreeitemarray)-1]))                
                         
-                if len(newprojfilepatharray) > len(self.current_proj.list_files):
+                if len(newprojfilepatharray) > len(self.current_proj.list_files):                    
                     for i in range(len(self.current_proj.list_files)):
                         self.projtreeitemarray[i].setText(0,self.getprojfilename(newprojfilepatharray[i]))
                         
                     for i in range(len(newprojfilepatharray)-len(self.current_proj.list_files)):
                         self.projtreeitemarray.append(QtGui.QTreeWidgetItem(self.projectTreeItem))
                         self.projtreeitemarray[len(self.projtreeitemarray)-1].setText(0,self.getprojfilename(newprojfilepatharray[len(self.projtreeitemarray)-1]))
-                
+
+                for _file in newprojfilepatharray:
+                    if os.path.exists (_file) == False:
+                        f = open (_file, "w")
+                        f.write ('')
+                        f.close ()
+                        
             self.current_proj.compile_only=self.winprojmanager.chkS.isChecked()
             self.current_proj.disable_inline=self.winprojmanager.chkfnoasm.isChecked()
             self.current_proj.define_symbols=self.winprojmanager.chkDefineSymbols.isChecked()
@@ -1908,19 +1914,16 @@ class athena(QtGui.QMainWindow):
         self.tracktabsarray.append(self.index)#Here self.tracktabsarray stores the index of file and self.tracktabsindex[self.tabs.currentIndex()] will give the index of tabs which displays the file.
         #or you can say index of file in projfilepatharray = self.tracktabsarray[self.tabs.currentIndex()}
        
-        if ext == 'c' or ext=='C' or self.current_proj.proj_type == 'C Project':            
+        if self.current_proj.proj_type == 'C Project':            
             highlight = syntaxc.CHighlighter(self.txtarray[self.tabs.count()-1].txtInput.document(),self)
             txtInput.setPlainText(docstr)
             txtInput.fill_c_code_completion()
             self.addtoencodingarray(self.tabs.count()-1,'C') 
-        else:
-            if ext == 'cpp' or ext =='CPP' or self.current_proj.proj_type == 'C++ Project':                
+        elif self.current_proj.proj_type == 'C++ Project':                
                 highlight = syntaxcpp.CPPHighlighter(self.txtarray[self.tabs.count()-1].txtInput.document())
                 txtInput.setPlainText(docstr)
                 txtInput.fill_cpp_code_completion()                    
-                self.addtoencodingarray(self.tabs.count()-1,'C++') 
-            else:
-                self.addtoencodingarray(self.tabs.count()-1,'PlainText') 
+                self.addtoencodingarray(self.tabs.count()-1,'C++')  
         
         self.filestate.append('opened')       
             
@@ -1957,7 +1960,7 @@ class athena(QtGui.QMainWindow):
         addnewfilepath = str(QtGui.QFileDialog.getSaveFileName(self,'Save File',self.current_proj.proj_path,('C Files(*.c);;C++ Files(*.cpp);;Header Files(*.h);;All Files(*.*)')))
         if addnewfilepath !="":
             self.projtreeitemarray.append(QtGui.QTreeWidgetItem(self.projectTreeItem))
-            self.projtreeitemarray[len(self.projtreeitemarray)-1].setText(0,addnewfilepath)
+            self.projtreeitemarray[len(self.projtreeitemarray)-1].setText(0,addnewfilepath[addnewfilepath.rfind ('/') +1:])
             self.current_proj.append_file(addnewfilepath)
         
     def newproj_dlg_finished(self,result):
@@ -1992,16 +1995,17 @@ class athena(QtGui.QMainWindow):
                 self.projectTree.setColumnCount(1)
                 self.projectTreeItem = QtGui.QTreeWidgetItem(self.projectTree)
                 self.projectTreeItem.setText(0,self.current_proj.proj_name)
-                
+
             if self.current_proj.proj_type == "GTK+ Project":
                 self.current_proj.proj_type="C Project"
-                self.proj_gtk_type = 'gtk+'
+                self.current_proj.proj_gtk_type = 'gtk+'
                 self.current_proj.other_args="`pkg-config --cflags --libs gtk+-2.0 gtksourceview-2.0 vte`"
             elif self.current_proj.proj_type == "gtkmm Project":
-                self.proj_gtk_type = 'gtkmm'
+                self.current_proj.proj_gtk_type = 'gtkmm'
                 self.current_proj.proj_type="C++ Project"
                 self.current_proj.other_args="`pkg-config gtkmm-2.4 --cflags --libs gtksourceviewmm-2.0 libvtemm-1.2`"
-                
+
+            self.current_proj.run_on_ext_console = True
             self.current_proj.write()
             
             self.tabs.clear()
@@ -2226,8 +2230,7 @@ class athena(QtGui.QMainWindow):
         if (os.path.exists (os.path.join (self.current_proj.proj_path, 'autogen.sh')) == False
             or os.path.exists (os.path.join (self.current_proj.proj_path,'Makefile.am')) == False
             or os.path.exists (os.path.join (self.current_proj.proj_path,'configure.ac')) == False):
-
-            QtGui.QMessageBox.information (self, "AthenaIDE", "Cannot build project make sure all files exists", QtGui.QMessageBox.Ok)
+            
             return False
 
         return True           
@@ -2236,6 +2239,7 @@ class athena(QtGui.QMainWindow):
 
         if self.mode == "Project":
             if self.check_build_files () == False:
+                QtGui.QMessageBox.information (self, "AthenaIDE", "Cannot build project make sure all files exists", QtGui.QMessageBox.Ok)
                 return
             
             self.runcompiler.build_project(self.current_proj,self.txtarray,self.tabs,self.tracktabsarray)
@@ -2259,13 +2263,15 @@ class athena(QtGui.QMainWindow):
     def create_auto_tools_files_triggered(self):
 
         if self.check_build_files () == True:
-            ask = QtGui.QMessageBox.information (self, "AthenaIDE", "All Auto Tools Files exists, Do you want to recreate them?", QtGui.QMessageBox.Yes,QtGui.QMessageBox.No)
+            ask = QtGui.QMessageBox.information (self, "AthenaIDE",\
+                                                 "All Auto Tools Files exists, Do you want to recreate them?",\
+                                                 QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
             if ask == QtGui.QMessageBox.No:
                 return
 
-            self.statusBar().showMessage("Building autogen.sh")
-            app.processEvents ()
-            autogen_sh_text = '''#!/bin/sh -e
+        self.statusBar().showMessage("Building autogen.sh")
+        app.processEvents ()
+        autogen_sh_text = '''#!/bin/sh -e
 
 test -n "$srcdir" || srcdir=`dirname "$0"`
 
@@ -2274,23 +2280,23 @@ test -n "$srcdir" || srcdir=.
 autoreconf --force --install --verbose "$srcdir"
 
 test -n "$NOCONFIGURE" || "$srcdir/configure" "$@"'''
-            f = open(os.path.join(self.current_proj.proj_path, "autogen.sh"), "w")
-            f.write(autogen_sh_text)
-            f.close()
+        f = open(os.path.join(self.current_proj.proj_path, "autogen.sh"), "w")
+        f.write(autogen_sh_text)
+        f.close()
 
-            self.statusBar().showMessage("Building configure.ac")
-            app.processEvents ()
+        self.statusBar().showMessage("Building configure.ac")
+        app.processEvents ()
 
-            compiler_type = ''
-            makefile_compiler_flag = ''
-            if self.current_proj.proj_type == 'C Project':
-                compiler_type = 'AC_PROG_CC'
-                makefile_compiler_flag = 'CCFLAGS'
-            else:
-                compiler_type = 'AC_PROG_CXX'
-                makefile_compiler_flag = 'CXXFLAGS'
-            
-            configure_ac_text = '''AC_INIT(%s, 0.1)
+        compiler_type = ''
+        makefile_compiler_flag = ''
+        if self.current_proj.proj_type == 'C Project':
+            compiler_type = 'AC_PROG_CC'
+            makefile_compiler_flag = 'CCFLAGS'
+        else:
+            compiler_type = 'AC_PROG_CXX'
+            makefile_compiler_flag = 'CXXFLAGS'
+        
+        configure_ac_text = '''AC_INIT(%s, 0.1)
 AM_INIT_AUTOMAKE([1.11 no-define foreign])
 %s
 AC_CONFIG_FILES([Makefile])
@@ -2298,20 +2304,20 @@ PKG_CHECK_MODULES([DEPS], [<deps>])
 AM_SILENT_RULES([yes])
 AC_OUTPUT'''%(self.current_proj.proj_name.split (' ')[0],compiler_type)
 
-            f = open(os.path.join(self.current_proj.proj_path, "configure.ac"), "w")
-            f.write(configure_ac_text)
-            f.close()
+        f = open(os.path.join(self.current_proj.proj_path, "configure.ac"), "w")
+        f.write(configure_ac_text)
+        f.close()
 
-            files_list = os.listdir (os.path.join(self.current_proj.proj_path, "src"))
-            sources_str = ''
-            for s in files_list:
-                sources_str += 'src/'+s +' '
+        files_list = os.listdir (os.path.join(self.current_proj.proj_path, "src"))
+        sources_str = ''
+        for s in files_list:
+            sources_str += 'src/'+s +' '
 
-            self.statusBar ().showMessage ("Building Makefile.am")
-            app.processEvents ()
+        self.statusBar ().showMessage ("Building Makefile.am")
+        app.processEvents ()
 
-            
-            makefile_am_text = '''AUTOMAKE_OPTIONS = subdir-objects
+        
+        makefile_am_text = '''AUTOMAKE_OPTIONS = subdir-objects
 ACLOCAL_AMFLAGS = ${ACLOCAL_FLAGS}
 AM_CPPFLAGS = $(DEPS_CFLAGS)
 
@@ -2321,19 +2327,19 @@ bin_PROGRAMS = %s
 %s_LDADD = $(DEPS_LIBS) -lpthread
 dist_noinst_SCRIPTS = autogen.sh
 ''' %(self.current_proj.proj_name.split (' ')[0],
-      self.current_proj.proj_name.split (' ')[0],
-      sources_str, self.current_proj.proj_name.split (' ')[0],
-      makefile_compiler_flag, self.current_proj.get_compiler_flags(),
-      self.current_proj.proj_name.split (' ')[0])
-            
-            f = open(os.path.join(self.current_proj.proj_path, "Makefile.am"), "w")
-            f.write(makefile_am_text)
-            f.close()
+  self.current_proj.proj_name.split (' ')[0],
+  sources_str, self.current_proj.proj_name.split (' ')[0],
+  makefile_compiler_flag, self.current_proj.get_compiler_flags(),
+  self.current_proj.proj_name.split (' ')[0])
+        
+        f = open(os.path.join(self.current_proj.proj_path, "Makefile.am"), "w")
+        f.write(makefile_am_text)
+        f.close()
 
-            ask = QtGui.QMessageBox.information (self, "AthenaIDE", "Please add the dependencies in configure.ac.", QtGui.QMessageBox.Ok)
-            
-            self.statusBar ().showMessage ("Auto Tools Files created successfully")
-            app.processEvents ()
+        ask = QtGui.QMessageBox.information (self, "AthenaIDE", "Please add the dependencies in configure.ac.", QtGui.QMessageBox.Ok)
+        
+        self.statusBar ().showMessage ("Auto Tools Files created successfully")
+        app.processEvents ()
             
     def toolbarrun(self):
 

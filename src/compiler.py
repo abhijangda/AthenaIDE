@@ -95,7 +95,8 @@ class compilerclass(QtGui.QDialog):
 
     def closeEvent(self,event):
 
-        os.chdir(self.olddir)
+        if self.olddir.strip () != '':
+            os.chdir(self.olddir)
 
     def run_debug(self):
         
@@ -128,8 +129,7 @@ class compilerclass(QtGui.QDialog):
     def run(self):
         
         if self.compilefilename != '':
-            if self.previous_run == 0:
-                self.olddir = os.getcwd()
+            self.olddir = os.getcwd()
             args = ''
             if self.mode == "Project":
                 if os.path.exists(str(self.parent.current_proj.curr_dir))==False:
@@ -140,13 +140,12 @@ class compilerclass(QtGui.QDialog):
                 self.compilefilename += ' ' +args
             else:
                 os.chdir(self.compilefilename[:self.compilefilename.rfind('/')])
-            
+
             if self.parent.current_proj.run_on_ext_console==True:
                 runshell.runccppprocess(self.compilefilename,self.olddir)
             else:
                 runshell.run_independently(self.compilefilename,self.olddir)
         
-        self.previous_run +=1
         
     def lstitem_doubleclicked(self,item):
 
@@ -159,8 +158,10 @@ class compilerclass(QtGui.QDialog):
         if filename.find('/') != -1:
             filename = filename[filename.find('/')+1:]
         
-        for i in range(len(self.txtinputarray)):
-            if self.txtinputarray[i].filename == filename:
+        for i in range(len(self.txtinputarray)):            
+            txt_filename = self.txtinputarray[i].filename
+            txt_filename = txt_filename [txt_filename.rfind ('/') + 1:]            
+            if txt_filename == filename:
                 break
         
         if i != len(self.txtinputarray):            
@@ -244,11 +245,7 @@ class compilerclass(QtGui.QDialog):
             
             self.txtinputarray = txtinputarray
             self.tabs = tabs            
-            
-            self.tabstrackarray = tabstrackarray
-            
-            self.thread = Thread(self.begin_build,self.build_callback)
-            self.thread.start()
+            self.tabstrackarray = tabstrackarray           
             
             compiler = ""
             f = open (self.configure_path, "r")
@@ -273,11 +270,13 @@ class compilerclass(QtGui.QDialog):
             self.listerroutput.clear()
             self.listerroutput.addItem('Compiling Please Wait...')
             self.show()
-                
+            self.thread = Thread(self.begin_build,self.build_callback)
+            self.thread.start()
+            
     def begin_build(self):
 
         if self.autogen_path != '':
-            curr_dir = os.curdir
+            curr_dir = os.getcwd()
             os.chdir(self.project.proj_path)
             p = subprocess.Popen(self.autogen_path,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
             self.output = unicode(p.stderr.read(),'utf-8')            
@@ -297,7 +296,7 @@ class compilerclass(QtGui.QDialog):
                 self.output = unicode(p.stderr.read(),'utf-8')
 
             os.chdir(curr_dir)
-
+           
     def build_callback(self):
 
         if self.output == '':

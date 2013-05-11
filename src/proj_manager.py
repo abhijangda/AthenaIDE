@@ -25,9 +25,11 @@ class ProjManagerDlg(QtGui.QDialog):
         
         self.cmdRemoveAll = QtGui.QPushButton("Remove All",self.tabGeneral)
         self.cmdRemoveAll.setGeometry(QtCore.QRect(650, 310, 95, 31))
+        self.connect (self.cmdRemoveAll, QtCore.SIGNAL ('clicked()'), self.cmdRemoveAllClicked)
         
         self.cmdRemoveFile = QtGui.QPushButton("Remove File",self.tabGeneral)
-        self.cmdRemoveFile.setGeometry(QtCore.QRect(650, 260, 95, 31))
+        self.cmdRemoveFile.setGeometry(QtCore.QRect(650, 260, 95, 31))        
+        self.connect (self.cmdRemoveFile, QtCore.SIGNAL ('clicked()'), self.cmdRemoveFileClicked)
         
         self.lblFiles = QtGui.QLabel("Files",self.tabGeneral)
         self.lblFiles.setGeometry(QtCore.QRect(20, 150, 67, 21))
@@ -192,7 +194,16 @@ class ProjManagerDlg(QtGui.QDialog):
         add_dir = str(QtGui.QFileDialog.getExistingDirectory(self, 'Add Directory',''))
         if add_dir!="":
             self.listViewDirs.insertItem(self.listViewDirs.count()-1,add_dir)
-            
+
+    def cmdRemoveAllClicked (self):
+
+        self.listViewFiles.clear ()
+
+    def cmdRemoveFileClicked (self):
+
+        self.listViewFiles.removeItemWidget(self.listViewFiles.currentItem())
+        self.listViewFiles.show()
+        
     def cmdRemoveDirClicked(self):
 
         self.listViewDirs.removeItemWidget(self.listViewDirs.currentItem())
@@ -349,7 +360,7 @@ class ProjManagerDlg(QtGui.QDialog):
         pos_start=string.find("<file>",pos_start+1)
         pos_end=string.find("</file>",pos_end+1)
         while  pos_start!=-1 and pos_end!=-1:
-            self.listViewFiles.insertItem(self.listViewFiles.count()-1,string[pos_start+6:pos_end])
+            self.listViewFiles.insertItem(self.listViewFiles.count(),string[pos_start+6:pos_end])
             pos_start=string.find("<file>",pos_start+1)
             pos_end=string.find("</file>",pos_end+1)
             

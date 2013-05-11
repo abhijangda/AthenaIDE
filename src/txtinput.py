@@ -7,7 +7,7 @@
 from PyQt4 import QtGui
 from PyQt4.Qt import QTextCursor
 from PyQt4 import QtGui,QtCore 
-import re
+import re,os
 global indentct,indentTF
 indentct = 0
 import time,random
@@ -236,10 +236,7 @@ class txtInputclass(QtGui.QTextEdit):
         #print self.includefileclassarray
         self.includefilefuncarray += self.includefilethread.includefilefuncarray
         self.includefiletypedefarray += self.includefilethread.list_typedef
-##        print self.includefilethread.includefiledatatypearray
-##        print self.includefilethread.includefilefuncarray
-##        print self.includefilethread.includefileclassarray
-         
+
     def document_contents_change(self,position,charsRemoved,charsAdded):
         
         ### Here the positions of detected functions and classes will be updated
@@ -407,7 +404,7 @@ class txtInputclass(QtGui.QTextEdit):
             line = unicode(cc.selectedText(),'utf-8',errors='ignore')
             new_include_file_list=[]                        
             self.get_include_file_classes_and_members(line,new_include_file_list)
-            #print self.new_include_file_list
+            print new_include_file_list
             if new_include_file_list == self.includefilethread.includefileslist:
                 #print 'llll'
                 #print self.includefilethread.includefileslist
@@ -517,13 +514,15 @@ class txtInputclass(QtGui.QTextEdit):
             if text.count('"') == 2:
                 file_name = text[text.find('"')+1:text.rfind('"')]
                 file_path = self.parent.filename
-                file_path = file_path[:file_path.rfind('/')+1] + file_name                                       
+                file_path = os.path.join (file_path[:file_path.rfind('/')+1],
+                                          file_name)
             else:
                 if text.count('>') == 1 and text.count('<'):
                 #    file_name = text[text.find('<'):text.rfind('>')]
                     pass
             if file_path == "" or file_name == "":
                 continue
+            
             if file_path not in self.includefilenamearray:
                 self.includefilenamearray.append(file_path)                 
                 new_include_file_list.append(file_path)                
@@ -542,9 +541,10 @@ class txtInputclass(QtGui.QTextEdit):
             #text = str(self.toPlainText())
             print 'C2'
             self.new_include_file_list=[]
+            self.includefilenamearray = []
             new_include_file_list=[]
             self.get_include_file_classes_and_members(text,new_include_file_list)
-            
+            print new_include_file_list
             self.includefilethread.setfilelist(new_include_file_list)
             self.includefilethread.run()
             self.thread_finished()
@@ -586,7 +586,7 @@ class txtInputclass(QtGui.QTextEdit):
                     struct.list_typedef.append(typedef)
                     self.curr_file_typedef_array.append(struct)
                     
-            for search_iter in re.finditer(r'[\w*]+[\s*]+[\w*]+[\s*]*\(+.*\)\s*{',text):
+            for search_iter in re.finditer(r'\w+[\s*\*]*\s+[\s*\*]*\w+\s*\(+.*\)\s*{',text):
                     
                     d = search_iter.group()
 
@@ -919,6 +919,26 @@ class txtInputclass(QtGui.QTextEdit):
         line =''
         k=0        
 
+        if self.funcmatchlist.isVisible () == True:
+            if event.key () == 16777237: #For Down key
+                self.funcmatchlist.setCurrentRow (
+                    self.funcmatchlist.currentRow () + 1)
+                return
+            
+            if event.key () == 16777235: #For Up key                
+                self.funcmatchlist.setCurrentRow (
+                    self.funcmatchlist.currentRow () - 1)
+                return
+            
+            if event.key () == 16777216: #For Esc key
+                self.funcmatchlist.setVisible (False)
+                return
+            
+            if event.key () == 16777217: #For Tab Key
+                self.funcmatchlistdoubleclicked (
+                    self.funcmatchlist.currentItem ())
+                return
+                
         if event.key() == 16777234 or event.key() == 16777219: #16777234 represents Left Key 16777219 for Backspace Key
 
             cc = self.textCursor()
@@ -934,7 +954,7 @@ class txtInputclass(QtGui.QTextEdit):
             cc.movePosition(QTextCursor.StartOfLine,QTextCursor.MoveAnchor)
             lineposition = cc.position()
             maxleftposition = cc.position()+spaces
-             
+            
             if event.key() == 16777219:
                 if currentposition <= maxleftposition and currentposition != lineposition:
                     if (currentposition-lineposition)%len(self.indentwidth)==0:
@@ -954,136 +974,14 @@ class txtInputclass(QtGui.QTextEdit):
                     else:
                         cc.setPosition(lineposition+int(float(currentposition-lineposition)/float(len(self.indentwidth)))*len(self.indentwidth)+1,QTextCursor.MoveAnchor)
                     self.setTextCursor(cc)
-
+                
         if self.indentTF == 'True' or self.indentTF==True:
             if (event.key() == QtCore.Qt.Key_Return or event.key() == QtCore.Qt.Key_Enter)and indentct>=0:
                 
-                cc = self.textCursor()
-                if self.funcmatchlist.isVisible()==True:                    
-                    self.funcmatchlistdoubleclicked(self.funcmatchlist.item(0))
-                    return
+                cc = self.textCursor()                
                 #cc.movePosition(QTextCursor.EndOfLine, QTextCursor.MoveAnchor)
                 cc.movePosition(QTextCursor.StartOfLine,QTextCursor.KeepAnchor)
                 line = str(cc.selectedText())                
-##                try:                    
-##                    if self.filetype == 'C Project' or self.filetype == 'C File':
-##                        ##To add functions when enter key is pressed to func array
-##                        line = line + ' '
-##                        for i in self.datatypearray:
-##                            for search_iter in re.finditer(r'\b%s\b\s*(\w+.+)'%i,line):
-##                                d = search_iter.group()
-##                                d = d[d.find(i)+len(i)+1:d.rfind('\n')]                            
-##                                if "(" in d and ")" in d:
-##                                    if "=" not in d and ";" not in d:
-##                                        if d not in self.includefilefuncarray:                                       
-##                                            self.includefilefuncarray.insert(self.parent.combo_func.currentIndex()+1,d)
-##                                            self.includefiledatatypearray.insert(self.parent.combo_func.currentIndex()+1,i)
-##                                            self.parent.combo_funcposarray.insert(self.parent.combo_func.currentIndex()+1,cc.position())
-##                                            self.parent.combo_func.insertItem(self.parent.combo_func.currentIndex()+1,i+" "+d)
-##                        line = line[:len(line)-1]
-##                    else:
-##                        #####Code to add functions and classes, when they are added
-##                        scope_resolution_operator_found = False
-##                        if self.parent.combo_class.count() == 0:
-##                            line = line + ' '
-##                            for i in self.datatypearray:
-##                                for search_iter in re.finditer(r'\b%s\b\s*(\w+.+)'%i,line):                                
-##                                    d = search_iter.group()
-##                                    d = d[d.find(i)+len(i)+1:d.rfind('\n')]                                
-##                                    if "(" in d and ")" in d:
-##                                        if "=" not in d and ";" not in d:
-##                                            if d not in self.includefilefuncarray:
-##                                                self.includefilefuncarray.insert(self.parent.combo_func.currentIndex()+1,d)
-##                                                self.includefiledatatypearray.insert(self.parent.combo_func.currentIndex()+1,i)
-##                                                self.parent.combo_funcposarray.insert(self.parent.combo_func.currentIndex()+1,cc.position())
-##                                                self.parent.combo_func.insertItem(self.parent.combo_func.currentIndex()+1,i+" "+d)
-##                            line = line[:len(line)-1]
-##                        else:
-##                            combo_class_current_index = self.parent.combo_class.currentIndex()
-##                            combo_class_current_text = str(self.parent.combo_class.itemText(combo_class_current_index))                        
-##                            for search_iter in re.finditer(r'\b%s::\s*(\w+.+)\s*'%str(self.parent.combo_class.itemText(combo_class_current_index)),line):
-##                                d = search_iter.group()
-##                                
-##                                if "(" in d and ")" in d and "=" not in d and ";" not in d:
-##                                        scope_resolution_operator_found = True
-##                                        func = d[d.find(combo_class_current_text)+len(combo_class_current_text)+len('::'):]
-##                                        for i in range(self.parent.combo_func.count()):
-##                                            if d == self.parent.combo_func.itemText(i):
-##                                                break
-##                                        if i != self.parent.combo_func.count():                                        
-##                                            self.parent.combo_funcposarray[combo_class_current_index].insert(self.parent.combo_func.currentIndex()+1,cc.position())                                    
-##                                            self.parent.combo_func.insertItem(self.parent.combo_func.currentIndex()+1,func)
-##                            ######If file contains class definition#####
-##                            if self.filetype == 'C++ Project' and '.h' in self.parent.filename:                            
-##                                for search_iter in re.finditer(r'\s+(.+\w+.+)?\;',line):
-##                                    d = search_iter.group()                                                                       
-##                                    add = False
-##                                    if "(" in d and ")" in d and "=" not in d:
-##                                        add = True
-##                                        index_open_bracket = d.rfind('(')
-##                                        space_rindex = 0
-##                                        if ' ' in d:                                        
-##                                            can_break = False
-##                                            for space_rindex in range(index_open_bracket+1,0,-1):
-##                                                if d[space_rindex].isalnum() or d[space_rindex] == '_':
-##                                                    can_break = True
-##                                                else:
-##                                                    if d[space_rindex].isspace() and can_break == True:
-##                                                        break                                
-##                                        
-##                                    if "(" not in d and ")" not in d:
-##                                        if '=' in d:
-##                                            add = True
-##                                            equals_index = d.rfind('=')
-##                                            can_break = False
-##                                            for space_rindex in range(equals_index,0,-1):
-##                                                if d[space_rindex].isalnum() or d[space_rindex] == '_':
-##                                                    can_break = True
-##                                                else:
-##                                                    if d[space_rindex].isspace() and can_break == True:
-##                                                        break                                    
-##                                        else:
-##                                            add = True
-##                                            space_rindex = d.rfind(' ')
-##                                                
-##                                    if add == True:
-##                                        count =1
-##                                        if '=' in d:
-##                                            self.parent.func_array[combo_class_current_index].insert(self.parent.combo_func.currentIndex()+1,d[0:space_rindex].rstrip() + ' ' +d[space_rindex:equals_index-1].lstrip())
-##                                            self.parent.combo_func.insertItem(self.parent.combo_func.currentIndex()+1,d[0:space_rindex].rstrip() + ' ' +d[space_rindex:equals_index-1].lstrip())
-##                                        else:
-##                                            self.parent.func_array[combo_class_current_index].insert(self.parent.combo_func.currentIndex()+1,(d.rstrip()).lstrip())
-##                                            self.parent.combo_func.insertItem(self.parent.combo_func.currentIndex()+1,(d.rstrip()).lstrip())
-##                                        self.parent.combo_funcposarray[combo_class_current_index].insert(self.parent.combo_func.currentIndex()+1,cc.position())                                
-##                                ##########################################################################
-##                    
-##                        if scope_resolution_operator_found == False:                            
-##                            ##Match classnames and add object names                        
-##                            for i in self.includefileclassarray:
-##                                if i in line:
-##                                    try:
-##                                        p = re.findall(r'\b%s\b\s*(\w+.?\;)'%i,line,re.DOTALL)[0] ##reg exp for finding only one object name, if there are more than one then except block will be called
-##                                        if ';' in p:
-##                                           object_array = [p[0:len(p)-1]]
-##                                        else:
-##                                           object_array = p.split(',')
-##                                    except IndexError :
-##                                        object_array = re.findall(r'\b%s\b\s*(\w+.+)?\;'%i,line,re.DOTALL)[0].split(',') #reg exp for finding more than one object name
-##                                               
-##                                    for j in object_array:
-##                                        try:
-##                                            index = self.object_namearray.index(j)
-##                                            #print index
-##                                            if i != self.object_classarray[index]:
-##                                                self.object_classarray[index] = i
-##                                        except:
-##                                            self.object_namearray.append(j)
-##                                            self.object_classarray.append(i)                        
-##                            #print self.object_namearray
-##                            #print self.object_classarray
-##                            ##################################################
-##                except:
-##                    pass
                 if line == '':
                     cc.movePosition(QTextCursor.EndOfLine, QTextCursor.MoveAnchor)
                     cc.movePosition(QTextCursor.StartOfLine,QTextCursor.KeepAnchor)
@@ -1113,6 +1011,7 @@ class txtInputclass(QtGui.QTextEdit):
                     for d in self.dec_indent_syms:
                         if d!=' ' and d!='\t':
                             dec_count += line.count(d)
+                            
                     if inc_count>dec_count:
                         k = 1                                                                        
                         indentct +=1
@@ -1131,6 +1030,7 @@ class txtInputclass(QtGui.QTextEdit):
                         index1 = break_index
                     if continue_index != -1 and line[continue_index-1] == ' ':
                         index1 = continue_index
+                
                     if inc_count<dec_count or index1 !=-1:
                         k=1
                         
@@ -1151,11 +1051,42 @@ class txtInputclass(QtGui.QTextEdit):
                     
                     if inc_count==dec_count and k !=1:
                         k=0
-                                               
+                        pos = cc.columnNumber()
+                        curr_pos = pos
+                        cc.select(QTextCursor.LineUnderCursor)
+                        line = str(cc.selectedText())
+                        line_no = cc.blockNumber ()
+                        last_line = line_no
+                        open_count = 0
+                        close_count = 1
+                        pos -=1            
+                        while open_count != close_count:
+                            
+                            pos -= 1
+                            if pos < 0:
+                                if line_no == 0:
+                                    break
+                                cc.movePosition (cc.Up)
+                                cc.select (QTextCursor.LineUnderCursor)
+                                line = str (cc.selectedText ())
+                                cc.movePosition (cc.EndOfLine)
+                                pos = cc.columnNumber () - 1
+                                line_no = cc.blockNumber ()
+                            
+                            if line[pos] == '(':
+                                open_count += 1
+                            elif line[pos] == ')':
+                                close_count += 1                        
+                            
                         QtGui.QTextEdit.keyPressEvent(self,event)
                         cc.movePosition(QtGui.QTextCursor.StartOfLine, QTextCursor.MoveAnchor)
-                        for i in range(0,indentct):
-                            cc.insertText(self.indentwidth)
+                        
+                        if pos != -1 and open_count == close_count:
+                            for i in range(0,pos):
+                                cc.insertText(' ')
+                        else:
+                            for i in range(0,indentct):
+                                cc.insertText(self.indentwidth)
                                                   
                         #if prevchar == '':
                            # QtGui.QTextEdit.keyPressEvent(self,event)
@@ -1204,103 +1135,55 @@ class txtInputclass(QtGui.QTextEdit):
             if len(self.tooltip_stack)!=0:                    
                 self.showtooltip = True            
          
-        if event.key() == 41: ##41 is for )
-            cc = self.textCursor()
-            self.closebrackets +=1
+        if event.key() == 41 or event.key() == 93: ##41 is for ) and 93 for ]
+            open_bracket = '['
+            close_bracket = ']'
+            if event.key () == 41:
+                open_bracket = '('
+                close_bracket = ')'
+                
+            cc = self.textCursor()            
             pos = cc.columnNumber()
+            curr_pos = pos
             cc.select(QTextCursor.LineUnderCursor)
             line = str(cc.selectedText())
-            self.indexopenbracketarray = []
-            self.indexclosebracketarray = []
-            index = 0
-            indexopenbracket = -1
-            for i in range(line.count("(")):
-                index = line.find("(",index)
-                self.indexopenbracketarray.append(index)
-                index +=1
-            index = 0
-            
-            if len(self.indexopenbracketarray) >0:
-                for i in range(line.count(")")):
-                    index = line.find(")",index)
-                    self.indexclosebracketarray.append(index)
-                    index +=1
+            line_no = cc.blockNumber ()
+            last_line = line_no
+            open_count = 0
+            close_count = 1
+            pos -=1            
+            while open_count != close_count:
                 
-                for i in range(line.count(")")):
-                    s = line[self.indexopenbracketarray[len(self.indexopenbracketarray)-1-i]:self.indexclosebracketarray[len(self.indexclosebracketarray)-1]+1]                    
-                    s1=""
-                    if s.count(")") == s.count("("):
-                        if pos == self.indexclosebracketarray[len(self.indexclosebracketarray)-1]+1:
-                            indexopenbracket = self.indexopenbracketarray[len(self.indexopenbracketarray)-1-i]
-                        else:
-                            for j in range(line.count(")")):
-                                if self.indexopenbracketarray[len(self.indexopenbracketarray)-1-j] <= pos:
-                                    s1 = line[self.indexopenbracketarray[len(self.indexopenbracketarray)-1-j]:pos]
-                                    if s1.count(")") == s1.count("("):
-                                        indexopenbracket = line.index(s1)
-                                        break
+                pos -= 1
+                if pos < 0:
+                    if line_no == 0:
                         break
-                if indexopenbracket != -1:                   
-                    cc.movePosition(QTextCursor.StartOfLine,QTextCursor.MoveAnchor)
-                    cc.movePosition(QTextCursor.NextCharacter,QTextCursor.MoveAnchor,indexopenbracket)
-                    cc.movePosition(cc.PreviousWord,cc.KeepAnchor)
-                    selected_text = cc.selectedText()
-
-                    if self.showtooltip==True:
+                    cc.movePosition (cc.Up)
+                    cc.select (QTextCursor.LineUnderCursor)
+                    line = str (cc.selectedText ())
+                    cc.movePosition (cc.EndOfLine)
+                    pos = cc.columnNumber () - 1
+                    line_no = cc.blockNumber ()
+                
+                if line[pos] == open_bracket:
+                    open_count += 1
+                elif line[pos] == close_bracket:
+                    close_count += 1
+                
+            if pos != -1 and open_count == close_count:
+                cc.movePosition (cc.StartOfLine)
+                cc.movePosition (cc.NextCharacter, cc.MoveAnchor, pos)
+                cc.movePosition (cc.Down, cc.KeepAnchor, last_line - line_no)
+                cc.movePosition (cc.NextCharacter, cc.KeepAnchor, curr_pos)
+                self.setTextCursor (cc)
+                if self.showtooltip==True:
                         self.tooltip_stack.pop(0)
                         
-                    if len(self.tooltip_stack) == 0:
-                        QtGui.QToolTip.hideText()
-                        self.showtooltip = False
-                        
-                    cc.movePosition(QTextCursor.StartOfLine,QTextCursor.MoveAnchor)
-                    cc.movePosition(QTextCursor.NextCharacter,QTextCursor.MoveAnchor,indexopenbracket)
-                    cc.movePosition(QTextCursor.NextCharacter,QTextCursor.KeepAnchor,pos-indexopenbracket)
-                    self.setTextCursor(cc)
-                    self.removeselectedtext = False
+                if len(self.tooltip_stack) == 0:
+                    QtGui.QToolTip.hideText()
+                    self.showtooltip = False
 
-        if event.key() == 93: ##93 is for ]            
-            cc = self.textCursor()
-            self.closebigbrackets +=1
-            pos = cc.columnNumber()
-            cc.select(QTextCursor.LineUnderCursor)
-            line = str(cc.selectedText())
-            self.indexopenbigbracketarray = []
-            self.indexclosebigbracketarray = []
-            index = 0
-            indexopenbigbracket = -1
-            for i in range(line.count("[")):
-                index = line.find("[",index)
-                self.indexopenbigbracketarray.append(index)
-                index +=1
-            index = 0
-            if len(self.indexopenbigbracketarray) >0:
-                for i in range(line.count("]")):
-                    index = line.find("]",index)
-                    self.indexclosebigbracketarray.append(index)
-                    index +=1
-                
-                for i in range(line.count("]")):
-                    s = line[self.indexopenbigbracketarray[len(self.indexopenbigbracketarray)-1-i]:self.indexclosebigbracketarray[len(self.indexclosebigbracketarray)-1]+1]
-                    s1=""
-                    if s.count("]") == s.count("["):
-                        if pos == self.indexclosebigbracketarray[len(self.indexclosebigbracketarray)-1]+1:
-                            indexopenbigbracket = self.indexopenbigbracketarray[len(self.indexopenbigbracketarray)-1-i]
-                        else:
-                            for j in range(line.count("]")):
-                                if self.indexopenbigbracketarray[len(self.indexopenbigbracketarray)-1-j] <= pos:
-                                    s1 = line[self.indexopenbigbracketarray[len(self.indexopenbigbracketarray)-1-j]:pos]
-                                    if s1.count("]") == s1.count("["):
-                                        indexopenbigbracket = line.index(s1)
-                                        break
-                        break
-                    
-                if indexopenbigbracket != -1:                   
-                    cc.movePosition(QTextCursor.StartOfLine,QTextCursor.MoveAnchor)
-                    cc.movePosition(QTextCursor.NextCharacter,QTextCursor.MoveAnchor,indexopenbigbracket)
-                    cc.movePosition(QTextCursor.NextCharacter,QTextCursor.KeepAnchor,pos-indexopenbigbracket)
-                    self.setTextCursor(cc)
-                    self.removeselectedtext = False
+                self.removeselectedtext = False
                     
         ##Show a list of all the matches for the object or function or class
                     
@@ -1397,15 +1280,18 @@ class txtInputclass(QtGui.QTextEdit):
             if self.filetype == 'C Project' or self.filetype == 'C File': ##For C Project, C Files and C++ Files with only global functions, because they will not contain any classes
                 
                 include_func_match_list = []
-
-                for i in range(len(self.includefilefuncarray)):                            
-                    if word == self.includefilefuncarray[i].name[0:len(word)]:
-                        include_func_match_list.append(self.includefilefuncarray[i].getDeclaration())
+                func_name_match_list = []
                 
                 for i in range(len(self.curr_file_func_array)):                            
                     if word == self.curr_file_func_array[i].name[0:len(word)]:
                         include_func_match_list.append(self.curr_file_func_array[i].getDeclaration())
-
+                        func_name_match_list.append (self.curr_file_func_array[i].name)
+                        
+                for i in range(len(self.includefilefuncarray)):                            
+                    if word == self.includefilefuncarray[i].name[0:len(word)] and\
+                       self.includefilefuncarray[i].name not in func_name_match_list:
+                        include_func_match_list.append(self.includefilefuncarray[i].getDeclaration())
+                        
                 for struct in self.includefileclassarray+self.curr_file_class_array:
                     if word == struct.name[0:len(word)]:
                         include_func_match_list.append(struct.getDeclaration())
@@ -1413,8 +1299,9 @@ class txtInputclass(QtGui.QTextEdit):
                         if word == typedef.name[0:len(word)]:
                             include_func_match_list.append(typedef.name)
 
-                include_func_match_list += self.main_win.gtk_support_structs.get_all_struct_with_str (word)
-                include_func_match_list += self.main_win.gtk_support_defines.get_all_define_with_str (word)
+                if self.main_win.current_proj.proj_gtk_type == 'gtk+':
+                    include_func_match_list += self.main_win.gtk_support_structs.get_all_struct_with_str (word)
+                    include_func_match_list += self.main_win.gtk_support_defines.get_all_define_with_str (word)
                 
                 for _object in self.list_objects+self.list_references+self.list_pointers:
                     if word == _object.name[0:len(word)]:                                
@@ -1431,7 +1318,8 @@ class txtInputclass(QtGui.QTextEdit):
                     self.funcmatchlist.setGeometry(x2,y2,250,160)
                     self.funcmatchlist.setVisible(True)
                     for string in include_func_match_list:
-                        self.funcmatchlist.addItem(string)                
+                        self.funcmatchlist.addItem(string)
+                    self.funcmatchlist.setCurrentRow (0)
             else:                    
                 ##For C++ Projects and C++ Files
                 

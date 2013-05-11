@@ -76,17 +76,14 @@ class gtk_functions (object):
         
         if func_str.count ('_') == 1:            
             for func_type in self.list_gtk_func_type:
-                if (func_str.find (func_type.name) != -1
-                    or func_type.name.find (func_str) != -1):
+                if func_type.name.find (func_str) == 0:
                     list_to_return += [func.getDeclaration () for func in func_type.list_funcs]
         else:
-            for func_type in self.list_gtk_func_type:
-                if (func_str.find (func_type.name) != -1
-                    or func_type.name.find (func_str) != -1):
+            for func_type in self.list_gtk_func_type:                
                     for func in func_type.list_funcs:
-                        if func.getDeclaration ().find (func_str) != -1:
+                        if func.name.find (func_str) == 0:
                             list_to_return.append (func.getDeclaration ())
-                    
+            
         return list_to_return
 
 class gtk_structs (object):

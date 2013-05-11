@@ -81,11 +81,10 @@ class CHighlighter (QSyntaxHighlighter):
 
         self.list_multi_line_comment_pos = []
         
-        self.gtk_enabled = None
+        self.gtk_enabled = False
         self.gtk_struct_str = ''
-        if main_win.gtk_support_structs == None:
-            self.gtk_enabled = False
-        else:
+        
+        if main_win.gtk_support_structs != None:            
             self.gtk_enabled = True
             self.gtk_struct_str = main_win.gtk_support_structs.all_structs_str
         
