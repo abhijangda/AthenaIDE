@@ -146,12 +146,15 @@ class CHighlighter (QSyntaxHighlighter):
                 index = expression.indexIn(text, index + length)
                 
         self.setCurrentBlockState(0)
-
-        if self.gtk_enabled == True:
-            
-            for search_iter in re.finditer (r'\w+', str(text)):
-                if re.findall (r'\b%s\b' % (search_iter.group ()), self.gtk_struct_str) != []:                    
-                    self.setFormat (search_iter.start(), search_iter.end () - search_iter.start (), format ('darkRed'))
+        try:            
+            if self.gtk_enabled == True:            
+                for search_iter in re.finditer (r'\w+', str(text)):
+                    if re.findall (r'\b%s\b' % (search_iter.group ()), self.gtk_struct_str) != []:                    
+                        self.setFormat (search_iter.start(), search_iter.end () - search_iter.start (), format ('darkRed'))
+        except AttributeError:
+            if main_win.gtk_support_structs != None:            
+                self.gtk_enabled = True
+                self.gtk_struct_str = main_win.gtk_support_structs.all_structs_str        
                     
         in_multiline = self.match_multiline(text, *self.multiline_comment)       
 

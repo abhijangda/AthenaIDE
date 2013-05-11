@@ -1052,13 +1052,13 @@ class txtInputclass(QtGui.QTextEdit):
                     if inc_count==dec_count and k !=1:
                         k=0
                         pos = cc.columnNumber()
-                        curr_pos = pos
+                        curr_pos = cc.position ()
                         cc.select(QTextCursor.LineUnderCursor)
                         line = str(cc.selectedText())
                         line_no = cc.blockNumber ()
                         last_line = line_no
                         open_count = 0
-                        close_count = 1
+                        close_count = 2
                         pos -=1            
                         while open_count != close_count:
                             
@@ -1077,7 +1077,7 @@ class txtInputclass(QtGui.QTextEdit):
                                 open_count += 1
                             elif line[pos] == ')':
                                 close_count += 1                        
-                            
+                        cc.setPosition (curr_pos, cc.MoveAnchor)
                         QtGui.QTextEdit.keyPressEvent(self,event)
                         cc.movePosition(QtGui.QTextCursor.StartOfLine, QTextCursor.MoveAnchor)
                         
@@ -1144,21 +1144,27 @@ class txtInputclass(QtGui.QTextEdit):
                 
             cc = self.textCursor()            
             pos = cc.columnNumber()
-            curr_pos = pos
+            curr_pos = cc.position ()
+            last_pos = curr_pos
+            
             cc.select(QTextCursor.LineUnderCursor)
             line = str(cc.selectedText())
             line_no = cc.blockNumber ()
             last_line = line_no
             open_count = 0
             close_count = 1
-            pos -=1            
+            pos -=1
+            
             while open_count != close_count:
                 
                 pos -= 1
+                last_pos -=1
+                
                 if pos < 0:
                     if line_no == 0:
                         break
                     cc.movePosition (cc.Up)
+                    last_pos -=1
                     cc.select (QTextCursor.LineUnderCursor)
                     line = str (cc.selectedText ())
                     cc.movePosition (cc.EndOfLine)
@@ -1170,11 +1176,10 @@ class txtInputclass(QtGui.QTextEdit):
                 elif line[pos] == close_bracket:
                     close_count += 1
                 
-            if pos != -1 and open_count == close_count:
-                cc.movePosition (cc.StartOfLine)
-                cc.movePosition (cc.NextCharacter, cc.MoveAnchor, pos)
-                cc.movePosition (cc.Down, cc.KeepAnchor, last_line - line_no)
-                cc.movePosition (cc.NextCharacter, cc.KeepAnchor, curr_pos)
+            if pos != -1 and open_count == close_count:                
+                self.setTextCursor (cc)
+                cc.setPosition (last_pos-1, cc.MoveAnchor)
+                cc.setPosition (curr_pos, cc.KeepAnchor)
                 self.setTextCursor (cc)
                 if self.showtooltip==True:
                         self.tooltip_stack.pop(0)
