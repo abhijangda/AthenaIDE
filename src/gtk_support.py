@@ -109,7 +109,9 @@ class gtk_structs (object):
 
     def get_all_struct_with_str (self, word):
         
-        return re.findall (r'%s\w*' % (word), self.all_structs_str)
+        d = re.findall (r'\b%s\w*' % (word), self.all_structs_str)
+        print d
+        return d
 
 class gtk_defines (object):
 
@@ -134,4 +136,4 @@ class gtk_defines (object):
 
     def get_all_define_with_str (self, word):
         
-        return re.findall (r'%s\w*' % (word), self.all_defines_str)
+        return re.findall (r'\b%s\w*' % (word), self.all_defines_str)

@@ -366,7 +366,7 @@ class ProjManagerDlg(QtGui.QDialog):
             
         pos_start = string.find("<run_on_ext_console>")+20
         pos_end=string.find("</run_on_ext_console>")
-        self.chkRunOnExternalConsole.setChecked(str_to_bool(string[pos_start:pos_end-pos_start]))
+        self.chkRunOnExternalConsole.setChecked(str_to_bool(string[pos_start:pos_end]))
         
         pos_start = string.find("<optimize>")+10
         pos_end=string.find("</optimize>")

@@ -404,7 +404,7 @@ class txtInputclass(QtGui.QTextEdit):
             line = unicode(cc.selectedText(),'utf-8',errors='ignore')
             new_include_file_list=[]                        
             self.get_include_file_classes_and_members(line,new_include_file_list)
-            print new_include_file_list
+            #print new_include_file_list
             if new_include_file_list == self.includefilethread.includefileslist:
                 #print 'llll'
                 #print self.includefilethread.includefileslist
@@ -535,16 +535,19 @@ class txtInputclass(QtGui.QTextEdit):
                 self.document().contentsChange.disconnect(self.document_contents_change)
             except:
                 pass        
-            print 'C1'    
+            #print 'C1'    
             self.document().contentsChange.connect(self.document_contents_change)
             text = unicode(self.toPlainText(),'utf-8',errors='ignore')
             #text = str(self.toPlainText())
-            print 'C2'
+            #print 'C2'
             self.new_include_file_list=[]
             self.includefilenamearray = []
             new_include_file_list=[]
+            self.includefilefuncarray = []
+            self.includefiletypedefarray = []
+            self.includefileclassarray = []
             self.get_include_file_classes_and_members(text,new_include_file_list)
-            print new_include_file_list
+            #print new_include_file_list
             self.includefilethread.setfilelist(new_include_file_list)
             self.includefilethread.run()
             self.thread_finished()
@@ -586,7 +589,7 @@ class txtInputclass(QtGui.QTextEdit):
                     struct.list_typedef.append(typedef)
                     self.curr_file_typedef_array.append(struct)
                     
-            for search_iter in re.finditer(r'\w+[\s*\*]*\s+[\s*\*]*\w+\s*\(+.*\)\s*{',text):
+            for search_iter in re.finditer(r'\w+[\s*\*]*\s+[\s*\*]*\w+\s*\(.*\s*.*\)\s*?{',text):
                     
                     d = search_iter.group()
 
@@ -746,7 +749,7 @@ class txtInputclass(QtGui.QTextEdit):
                     self.parent.func_array[len(self.parent.combo_funcposarray)-1].insert(k,d)            
                     
             ##For Global functions       
-            for search_iter in re.finditer(r'[\w*]+[\s*]+[\w*]+\(+.*\)\s*{',text):                
+            for search_iter in re.finditer(r'\w+[\s*\*]*\s+[\s*\*]*\w+\s*\(.*\s*.*\)\s*?{',text):                
                 d = search_iter.group()                
                 d = d[:d.rfind('{')]
                 d = d.strip()
@@ -786,6 +789,11 @@ class txtInputclass(QtGui.QTextEdit):
         text = str(item.text())        
         
         if "(" in text and ")" in text and "=" not in text:
+            print text
+            for i in range (len (self.tooltip_stack) -1, 0, -1):
+               if isinstance (self.tooltip_stack [i], tuple) == False:                    
+                    del self.tooltip_stack [i]
+            
             self.tooltip_stack.insert(0,text)
             add = True
             index_open_bracket = text.rfind('(')
@@ -798,7 +806,8 @@ class txtInputclass(QtGui.QTextEdit):
                     else:
                         if text[space_rindex].isspace() and can_break == True:
                             break          
-            text = text[:text.find('(')]            
+            text = text[:text.find('(')]
+
         if "(" not in text and ")" not in text:
             if '=' in text:
                 equals_index = text.rfind('=')
@@ -906,6 +915,63 @@ class txtInputclass(QtGui.QTextEdit):
             cc.insertText('\n...\n')
 
         self.document().contentsChange.connect(self.document_contents_change)
+
+    #This function returns a tuple (pos, line_no, full_pos)
+        
+    def get_matching_bracket_pos (self, open_bracket, close_bracket):
+
+        cc = self.textCursor()            
+        pos = cc.columnNumber()
+        curr_pos = cc.position ()
+        last_pos = curr_pos
+        
+        cc.select(QTextCursor.LineUnderCursor)
+        line = str(cc.selectedText())
+        if close_bracket == '};':
+            close_bracket = '}'
+            pos1 = line.find ('}') + 1
+            last_pos -= pos - pos1
+            pos = pos1
+
+        line_no = cc.blockNumber ()
+        
+        last_line = line_no
+        open_count = 0
+        close_count = 0
+        
+        #Trying to implement do while loop here
+        while True:
+            
+            pos -= 1
+            last_pos -=1
+            
+            if pos < 0:                
+                if line_no == 0:
+                    break
+                cc.movePosition (cc.Up)
+                last_pos -=1
+                cc.select (QTextCursor.LineUnderCursor)
+                line = str (cc.selectedText ())
+                cc.movePosition (cc.EndOfLine)
+                pos = cc.columnNumber () - 1
+                line_no = cc.blockNumber ()
+                if pos == -1: #To Handle case if line contains nothing
+                    continue  #then pos becomes -1
+
+            if line[pos] == open_bracket:
+                open_count += 1
+            elif line[pos] == close_bracket:
+                close_count += 1
+
+            if open_count == close_count:
+                break
+        pos +=1
+        last_pos +=1
+        if pos !=-1 and open_count == close_count:
+
+            return (pos, line_no, last_pos)
+
+        return (-1, -1, -1)
     
     def keyPressEvent(self,event):
 
@@ -919,26 +985,41 @@ class txtInputclass(QtGui.QTextEdit):
         line =''
         k=0        
 
+        if event.modifiers () != QtCore.Qt.NoModifier and event.key() != 40 and event.key() != 41 and event.key () != 93:
+            QtGui.QTextEdit.keyPressEvent(self,event)
+            return
+
         if self.funcmatchlist.isVisible () == True:
-            if event.key () == 16777237: #For Down key
+            if event.modifiers () != QtCore.Qt.NoModifier: #Qt.NoModifiers
+                self.funcmatchlist.setVisible (False)
+
+            elif event.key () == 16777237: #For Down key
                 self.funcmatchlist.setCurrentRow (
                     self.funcmatchlist.currentRow () + 1)
                 return
-            
-            if event.key () == 16777235: #For Up key                
+              
+            elif event.key () == 16777235: #For Up key                
                 self.funcmatchlist.setCurrentRow (
                     self.funcmatchlist.currentRow () - 1)
                 return
             
-            if event.key () == 16777216: #For Esc key
+            elif event.key () == 16777216: #For Esc key
                 self.funcmatchlist.setVisible (False)
                 return
             
-            if event.key () == 16777217: #For Tab Key
+            elif event.key () == 16777217: #For Tab Key
                 self.funcmatchlistdoubleclicked (
                     self.funcmatchlist.currentItem ())
                 return
-                
+            
+            else:
+                #funcmatchlist should be invisible if any other key is pressed
+                self.funcmatchlist.setVisible (False)
+
+        if event.key() == 16777217 and not self.funcmatchlist.isVisible ():# and self.parent.parent.spacesontabs == "True": #For Tab Key
+            self.textCursor().insertText("    ")
+            return
+            
         if event.key() == 16777234 or event.key() == 16777219: #16777234 represents Left Key 16777219 for Backspace Key
 
             cc = self.textCursor()
@@ -1013,7 +1094,7 @@ class txtInputclass(QtGui.QTextEdit):
                             dec_count += line.count(d)
                             
                     if inc_count>dec_count:
-                        k = 1                                                                        
+                        k = 1
                         indentct +=1
                         if indentct == 0:
                             QtGui.QTextEdit.keyPressEvent(self,event)
@@ -1032,60 +1113,60 @@ class txtInputclass(QtGui.QTextEdit):
                         index1 = continue_index
                 
                     if inc_count<dec_count or index1 !=-1:
-                        k=1
                         
-                        indentct -= 1
-                        cc.movePosition(QTextCursor.StartOfLine, QTextCursor.MoveAnchor)                            
-                        if line.count (' ') >= len(self.indentwidth):                                
-                            for i in range (len(self.indentwidth)):
+                        k=1
+                        curr_pos = cc.position ()
+                        pos, line_no, last_pos = -1, -1, -1
+                        if line.find ('};') == -1:
+                            pos, line_no, last_pos = self.get_matching_bracket_pos \
+                                                     ('{', '}')
+                        else:
+                            pos, line_no, last_pos = self.get_matching_bracket_pos \
+                                                     ('{', '};')
+                            print 'fff'
+
+                        del_indentct = 1
+                        
+                        if pos != -1:
+                            cc.setPosition (last_pos, cc.MoveAnchor)
+                            cc.select (cc.LineUnderCursor)
+                            line1 = cc.selectedText ()
+                            print line1
+                            indent1 = 0
+                            for c in line1:
+                                if c == ' ':
+                                    indent1 += 1
+                                else:
+                                    break                            
+
+                            del_indentct = indentct - indent1 / len (self.indentwidth)
+                            cc.setPosition (curr_pos, cc.MoveAnchor)
+
+                            indentct -= 1
+                        cc.movePosition(QTextCursor.StartOfLine, QTextCursor.MoveAnchor)
+
+                        if line.count (' ') >= len(self.indentwidth):
+                            for i in range (del_indentct * len (self.indentwidth)):                                
                                 cc.deleteChar ()
+
                         cc.movePosition(QTextCursor.EndOfLine,QTextCursor.MoveAnchor)
+                        
                         if indentct == 0:
                             QtGui.QTextEdit.keyPressEvent(self,event)
                         else:                            
                             QtGui.QTextEdit.keyPressEvent(self,event)
-                            cc.movePosition(QTextCursor.StartOfLine, QTextCursor.MoveAnchor)
+                            cc.movePosition(QTextCursor.StartOfLine,
+                                            QTextCursor.MoveAnchor)
                             for i in range(0,indentct):
-                                cc.insertText(self.indentwidth)
-                        
+                                cc.insertText(self.indentwidth)                        
                     
                     if inc_count==dec_count and k !=1:
                         k=0
-                        pos = cc.columnNumber()
-                        curr_pos = cc.position ()
-                        cc.select(QTextCursor.LineUnderCursor)
-                        line = str(cc.selectedText())
-                        line_no = cc.blockNumber ()
-                        last_line = line_no
-                        open_count = 0
-                        close_count = 2
-                        pos -=1            
-                        while open_count != close_count:
-                            
-                            pos -= 1
-                            if pos < 0:
-                                if line_no == 0:
-                                    break
-                                cc.movePosition (cc.Up)
-                                cc.select (QTextCursor.LineUnderCursor)
-                                line = str (cc.selectedText ())
-                                cc.movePosition (cc.EndOfLine)
-                                pos = cc.columnNumber () - 1
-                                line_no = cc.blockNumber ()
-                            
-                            if line[pos] == '(':
-                                open_count += 1
-                            elif line[pos] == ')':
-                                close_count += 1                        
-                        cc.setPosition (curr_pos, cc.MoveAnchor)
+                        
                         QtGui.QTextEdit.keyPressEvent(self,event)
                         cc.movePosition(QtGui.QTextCursor.StartOfLine, QTextCursor.MoveAnchor)
                         
-                        if pos != -1 and open_count == close_count:
-                            for i in range(0,pos):
-                                cc.insertText(' ')
-                        else:
-                            for i in range(0,indentct):
+                        for i in range(0,indentct):
                                 cc.insertText(self.indentwidth)
                                                   
                         #if prevchar == '':
@@ -1122,19 +1203,27 @@ class txtInputclass(QtGui.QTextEdit):
             self.setTextCursor(cc)
             
         if self.showtooltip == True:
-            x1,y1,x2,y2 = self.cursorRect().getCoords()
-            self.tooltip_x = self.mapToGlobal(QtCore.QPoint(x2,y2)).x()
-            self.tooltip_y = self.mapToGlobal(QtCore.QPoint(x2,y2)).y()
-            QtGui.QToolTip.showText(QtCore.QPoint(self.tooltip_x,self.tooltip_y),self.tooltip_stack[0],self)
+            if cc.position () >= self.tooltip_stack[0][1]:                
+                x1,y1,x2,y2 = self.cursorRect().getCoords()
+                self.tooltip_x = self.mapToGlobal(QtCore.QPoint(x2,y2)).x()
+                self.tooltip_y = self.mapToGlobal(QtCore.QPoint(x2,y2)).y()
+                QtGui.QToolTip.showText (QtCore.QPoint (self.tooltip_x, self.tooltip_y),
+                                         self.tooltip_stack[0][0], self)
             
         if event.key() == 40: #40 is for (
             cc = self.textCursor()
+            curr_pos = cc.position ()
             cc.movePosition(cc.PreviousWord,cc.KeepAnchor,2)
             selected_text = str(cc.selectedText())            
             
-            if len(self.tooltip_stack)!=0:                    
-                self.showtooltip = True            
-         
+            if len(self.tooltip_stack)!=0:
+                
+                text = self.tooltip_stack [0]
+                if isinstance (text, tuple) == False:
+                    self.tooltip_stack [0] = (text, curr_pos)
+                
+                self.showtooltip = True
+           
         if event.key() == 41 or event.key() == 93: ##41 is for ) and 93 for ]
             open_bracket = '['
             close_bracket = ']'
@@ -1142,51 +1231,22 @@ class txtInputclass(QtGui.QTextEdit):
                 open_bracket = '('
                 close_bracket = ')'
                 
-            cc = self.textCursor()            
-            pos = cc.columnNumber()
             curr_pos = cc.position ()
-            last_pos = curr_pos
-            
-            cc.select(QTextCursor.LineUnderCursor)
-            line = str(cc.selectedText())
-            line_no = cc.blockNumber ()
-            last_line = line_no
-            open_count = 0
-            close_count = 1
-            pos -=1
-            
-            while open_count != close_count:
-                
-                pos -= 1
-                last_pos -=1
-                
-                if pos < 0:
-                    if line_no == 0:
-                        break
-                    cc.movePosition (cc.Up)
-                    last_pos -=1
-                    cc.select (QTextCursor.LineUnderCursor)
-                    line = str (cc.selectedText ())
-                    cc.movePosition (cc.EndOfLine)
-                    pos = cc.columnNumber () - 1
-                    line_no = cc.blockNumber ()
-                
-                if line[pos] == open_bracket:
-                    open_count += 1
-                elif line[pos] == close_bracket:
-                    close_count += 1
-                
-            if pos != -1 and open_count == close_count:                
+            pos, line_no, last_pos = self.get_matching_bracket_pos (open_bracket,
+                                                                    close_bracket)
+            if pos != -1:                
                 self.setTextCursor (cc)
-                cc.setPosition (last_pos-1, cc.MoveAnchor)
+                cc.setPosition (last_pos - 1, cc.MoveAnchor)
                 cc.setPosition (curr_pos, cc.KeepAnchor)
                 self.setTextCursor (cc)
-                if self.showtooltip==True:
+                
+                if open_bracket == '(':                    
+                    if self.showtooltip==True and self.tooltip_stack[0][1] == last_pos:
                         self.tooltip_stack.pop(0)
-                        
-                if len(self.tooltip_stack) == 0:
-                    QtGui.QToolTip.hideText()
-                    self.showtooltip = False
+                            
+                    if len(self.tooltip_stack) == 0:
+                        QtGui.QToolTip.hideText()
+                        self.showtooltip = False
 
                 self.removeselectedtext = False
                     
@@ -1291,12 +1351,16 @@ class txtInputclass(QtGui.QTextEdit):
                     if word == self.curr_file_func_array[i].name[0:len(word)]:
                         include_func_match_list.append(self.curr_file_func_array[i].getDeclaration())
                         func_name_match_list.append (self.curr_file_func_array[i].name)
-                        
+
+                #print "(((",include_func_match_list,")))"
+                
                 for i in range(len(self.includefilefuncarray)):                            
                     if word == self.includefilefuncarray[i].name[0:len(word)] and\
                        self.includefilefuncarray[i].name not in func_name_match_list:
                         include_func_match_list.append(self.includefilefuncarray[i].getDeclaration())
-                        
+
+                #print "[[[[[",include_func_match_list,"]]]]"
+                
                 for struct in self.includefileclassarray+self.curr_file_class_array:
                     if word == struct.name[0:len(word)]:
                         include_func_match_list.append(struct.getDeclaration())
@@ -1749,4 +1813,5 @@ class codewidget(QtGui.QWidget):
 
         self.linePointer=line
         self.drawLinePointer = True
+        print "setlinepointer", line
         self.breakpoints_bar.repaint()

@@ -65,11 +65,8 @@ class CHighlighter (QSyntaxHighlighter):
         '\{', '\}', '\(', '\)', '\[', '\]',
     ]
     def __init__(self, document, main_win):
+        global gtk_enabled, gtk_struct_str
         QSyntaxHighlighter.__init__(self, document)
-
-        # FIXME: The triple-quotes in these two lines will mess up the
-        # syntax highlighting from this point onward
-        
         
         self.build_rules()
 
@@ -80,14 +77,14 @@ class CHighlighter (QSyntaxHighlighter):
         self.document = document
 
         self.list_multi_line_comment_pos = []
-        
-        self.gtk_enabled = False
-        self.gtk_struct_str = ''
-        
-        if main_win.gtk_support_structs != None:            
-            self.gtk_enabled = True
-            self.gtk_struct_str = main_win.gtk_support_structs.all_structs_str
-        
+        print 'kkkkkk'
+        gtk_enabled = False
+        gtk_struct_str = ''
+        self.main_win= main_win
+        if self.main_win.gtk_support_structs != None:            
+            gtk_enabled = True
+            gtk_struct_str = main_win.gtk_support_structs.all_structs_str
+        print gtk_enabled
     def build_rules(self):
 
         self.multiline_comment = (QRegExp("/\*"),QRegExp("\*/"), 1, STYLES['comment'])
@@ -130,7 +127,8 @@ class CHighlighter (QSyntaxHighlighter):
         
     def highlightBlock(self, text):
         """Apply syntax highlighting to the given block of text.
-        """        
+        """
+        global gtk_enabled, gtk_struct_str
         # Do other syntax formatting
         try:
             r = self.rules
@@ -146,16 +144,19 @@ class CHighlighter (QSyntaxHighlighter):
                 index = expression.indexIn(text, index + length)
                 
         self.setCurrentBlockState(0)
-        try:            
-            if self.gtk_enabled == True:            
-                for search_iter in re.finditer (r'\w+', str(text)):
-                    if re.findall (r'\b%s\b' % (search_iter.group ()), self.gtk_struct_str) != []:                    
-                        self.setFormat (search_iter.start(), search_iter.end () - search_iter.start (), format ('darkRed'))
-        except AttributeError:
-            if main_win.gtk_support_structs != None:            
-                self.gtk_enabled = True
-                self.gtk_struct_str = main_win.gtk_support_structs.all_structs_str        
-                    
+        #try:            
+        if gtk_enabled == True:            
+            for search_iter in re.finditer (r'\w+', str(text)):
+                if re.findall (r'\b%s\b' % (search_iter.group ()), gtk_struct_str) != []:                    
+                    self.setFormat (search_iter.start(), search_iter.end () - search_iter.start (), format ('darkRed'))
+##        except AttributeError:
+##            try:
+##                if self.main_win.gtk_support_structs != None:            
+##                    self.gtk_enabled = True
+##                    self.gtk_struct_str = main_win.gtk_support_structs.all_structs_str        
+##            except AttributeError:
+##                pass
+            
         in_multiline = self.match_multiline(text, *self.multiline_comment)       
 
     def match_multiline(self,text,delimiter_start,delimiter_end,in_state,style):

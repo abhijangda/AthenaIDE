@@ -1,5 +1,0 @@
-f = open ('gtk_structs', 'r+')
-s = f.read()
-s = s.replace (' ','\n')
-f.write (s)
-f.close ()

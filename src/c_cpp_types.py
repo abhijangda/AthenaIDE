@@ -139,7 +139,10 @@ class CFunction(object):
         declaration = declaration.replace('{','')
         self.name = declaration[:declaration.rfind('(')]
         self.name = self.name.strip()
-        self.return_type = self.name[:self.name.rfind(' ')]
+        if self.name.find ('*') != -1:
+            self.return_type = self.name[:self.name.rfind('*')+1]
+        else:
+            self.return_type = self.name[:self.name.rfind(' ')]
         self.name = self.name[self.name.find(self.return_type)+len(self.return_type):]
         self.name = self.name.strip()
         self.return_type = self.return_type.strip()

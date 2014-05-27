@@ -70,7 +70,7 @@ class IncludeFileThread(QtCore.QThread):
                             struct.list_typedef.append(typedef)
                             self.list_typedef.append(typedef)
                     
-                for search_iter in re.finditer(r'\w+[\s*\*]*\s+[\s*\*]*\w+\s*\(+.*\)\s*{',text):
+                for search_iter in re.finditer(r'\w+[\s*\*]*\s+[\s*\*]*\w+\s*\(.*\s*.*\)\s*?;',text):
                     #print d,filename
                     d = search_iter.group()                    
                     if d.rfind ('\n') > d.rfind (')'):
@@ -84,16 +84,16 @@ class IncludeFileThread(QtCore.QThread):
                     self.includefilefuncarray.append(func)                    
                     #self.includefiledatatypearray.append(i)
                 
-                for search_iter in re.finditer(r'\w+[\s*\*]*\s+[\s*\*]*\w+\s*\(+.*\)\s*;',text):
+                for search_iter in re.finditer(r'\w+[\s*\*]*\s+[\s*\*]*\w+\s*\(.*\s*.*\)\s*?{',text):
                     d = search_iter.group()
                     if d.rfind ('\n') > d.rfind (')'):
                         d = d[:d.rfind('\n')]
 
                     d = d.replace ('\n', ' ')
-                    #print d
+                    
                     func = CFunction()
                     func.createFromDeclaration(d)
-                    
+                    #print func.name
                     if isThisAFunction(d)==False:
                         continue
                     

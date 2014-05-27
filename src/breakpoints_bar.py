@@ -1,20 +1,22 @@
 from PyQt4 import QtGui,QtCore
+import os
 from breakpoints import *
+import helper_functions
 
 class BreakpointsBar(QtGui.QWidget):
 
     def __init__(self, parent= None, *args):
-            
-            QtGui.QWidget.__init__(self, parent,*args)
-            self.edit = None
-            self.parent = parent
-            self.first_line = 0
-            self.highest_line=0
-            self.acceptBreakpoints = True
-            self.showing_breakpoints = False
-            self.breakpoint_enable_image=QtGui.QImage("./breakpoint-enable1.png")
-            self.breakpoint_disable_image=QtGui.QImage("./breakpoint-disable1.png")
-            self.arrow_image = QtGui.QImage("./arrow.png")
+        
+        QtGui.QWidget.__init__(self, parent,*args)
+        self.edit = None
+        self.parent = parent
+        self.first_line = 0
+        self.highest_line=0
+        self.acceptBreakpoints = True
+        self.showing_breakpoints = False
+        self.breakpoint_enable_image=QtGui.QImage(os.path.join (helper_functions.getRootDir (), "icons/breakpoint-enable1.png"))
+        self.breakpoint_disable_image=QtGui.QImage(os.path.join (helper_functions.getRootDir (), "icons/breakpoint-disable1.png"))
+        self.arrow_image = QtGui.QImage(os.path.join (helper_functions.getRootDir (), "icons/arrow.png"))
             
     def setTextEdit(self, edit):
         
@@ -32,7 +34,7 @@ class BreakpointsBar(QtGui.QWidget):
             if mouse_event.y() >= self.list_draw_text_y[i][0]-self.fontMetrics().ascent():
                 line = self.list_draw_text_y[i][1]
                 break            
-        
+        print line
         if line!=-1:
             found = False
             breakpoint = LineBreakpoint(0,0,"")

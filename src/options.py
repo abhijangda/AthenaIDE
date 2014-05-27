@@ -24,7 +24,8 @@ class winoptions(QtGui.QDialog):
         wordwrap = ''
         autosave = ''
         recentfiles = ''
-        
+        spacesontabs = ''
+
         try:
             
             settings = ''
@@ -57,7 +58,10 @@ class winoptions(QtGui.QDialog):
 
             for i in range(settings.index('<tabwidth>')+len('<tabwidth>'),settings.index('</tabwidth>')):
                 tabwidth = tabwidth + settings[i]
-                
+            
+            for i in range(settings.index('<spacesontabs>')+len('<spacesontabs>'),settings.index('</spacesontabs>')):
+                spacesontabs = spacesontabs + settings[i]
+            
             for i in range(settings.index('<encoding>')+len('<encoding>'),settings.index('</encoding>')):
                 encoding = encoding + settings[i]
             
@@ -145,9 +149,13 @@ class winoptions(QtGui.QDialog):
                         
         self.lbltabwidth = QtGui.QLabel("Tab Width (Spaces per 1 Tab)",self.page_general)
         self.txttabwidth = QtGui.QLineEdit(self.page_general)
-
         self.txttabwidth.setText(tabwidth)
-        
+        self.chkspacesontabs = QtGui.QCheckBox("Insert Spaces instead of Tabs",self.page_general)
+        if spacesontabs == 'True':
+            self.chkspacesontabs.setChecked(True)
+        else:
+            self.chkspacesontabs.setChecked(False)
+
         self.chkwordwrap = QtGui.QCheckBox("Word Wrap",self.page_general)
 
         if wordwrap == 'True':
@@ -175,6 +183,7 @@ class winoptions(QtGui.QDialog):
         self.radioplain.setGeometry(160,260,108,26)
         self.lbltabwidth.setGeometry(10,300,201,21)
         self.txttabwidth.setGeometry(240,300,113,31)
+        self.chkspacesontabs.setGeometry(400,300,240,31)
         self.chkwordwrap.setGeometry(10,330,121,26)
         self.chkrecentfiles.setGeometry(10,355,221,26)
         
@@ -806,6 +815,7 @@ class winoptions(QtGui.QDialog):
 
         autosavetimeout = ''
         autosavetabs = ''
+        spacesontabs = ''
 
         if self.chkautosave.isChecked():
             autosave = 'True'
@@ -825,15 +835,21 @@ class winoptions(QtGui.QDialog):
             recentfiles = 'True'
         else:
             recentfiles = 'False'
+        
+        if self.chkspacesontabs.isChecked():
+            spacesontabs = 'True'
+        else:
+            spacesontabs = 'False'
+
         gcccommand = self.gcc_command_line_edit.text()
         gppcommand = self.gpp_command_line_edit.text()
         settings = '<encoding>' + encoding + '</encoding>'+ '\n<indentation>' + indent + '</indentation>'
         settings = settings + '\n<indentwidth>' + indent_width+'</indentwidth>'+'\n<incindentsymbols>'+inc_indent_syms+'</incindentsymbols>'+'\n<decindentsymbols>' +dec_indent_syms + '</decindentsymbols>'
         settings = settings + '\n<autosave>' + autosave + '</autosave>' + '\n<autosavetimeout>' + autosavetimeout + '</autosavetimeout>' + '\n<autosavetabs>' + autosavetabs + '</autosavetabs>'
         settings = settings + '\n<wordwrap>' + wordwrap + '</wordwrap>' + '\n<tabwidth>' + tabwidth + '</tabwidth>'
-        settings = settings + '\n<recent files>'+recentfiles+'</recent files>'
+        settings = settings + '\n<spacesontabs>' + spacesontabs + '</spacesontabs>' + '\n<recent files>'+recentfiles+'</recent files>'
         settings = settings +'\n<gcc>' + gcccommand + '</gcc>' +'\n<g++>' + gppcommand+'</g++>'
-                               
+        
         try:
             os.remove('./settings.ini')
         except:

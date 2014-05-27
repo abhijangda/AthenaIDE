@@ -62,13 +62,15 @@ class GdbConsoleDlg(QtGui.QDialog):
                 self.process_terminal.appendOutput('Program Stopped, Breakpoint Reached')
                 self.emit(QtCore.SIGNAL('processStoppedBreakpointHit(QString,int)'),QtCore.QString(filepath),line)
 
-            elif string.find('*stopped,reason="signal-received"')!=-1:                
+            elif string.find('*stopped,reason="signal-received"')!=-1:
                 signal_name = string[string.find('signal-name="')+len('signal-name="'):string.find('"',string.find('signal-name="')+len('signal-name="')+2)]
                 filepath = string[string.find('fullname="')+len('fullname="'):string.find('"',string.find('fullname="')+len('fullname="')+2)]
-                line = int(string[string.find('line="')+len('line="'):string.find('"',string.find('line="')+len('line="')+1)])
+                line = -1
+                if string.find ('line="') != -1:
+                    line = int(string[string.find('line="')+len('line="'):string.find('"',string.find('line="')+len('line="')+1)])
                 self.process_terminal.appendOutput('Program Stopped, Signal Reached')                
                 self.emit(QtCore.SIGNAL('processStoppedSignalRecieved(QString,QString,int)'),QtCore.QString(signal_name),QtCore.QString(filepath),line)
-                
+        
             else:
                 self.process_terminal.appendOutput('Program Stopped, Unexpectedly')
                 self.emit(QtCore.SIGNAL('processStopped()'))
@@ -79,6 +81,9 @@ class GdbConsoleDlg(QtGui.QDialog):
             s=s.replace(']','')
             s=s.replace('(gdb)','')
             self.emit(QtCore.SIGNAL('showLocals(QString)'),QtCore.QString(s))
+
+        elif string.find("^done,stack=[frame=") != -1:
+            self.emit(QtCore.SIGNAL('showBacktrace(QString)'),QtCore.QString(string))
             
     def writeCommand(self,string):
 
