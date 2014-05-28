@@ -1,5 +1,7 @@
 from PyQt4 import QtCore, QtGui
 from helper_functions import *
+import file_tree_widget
+import os
 
 class ProjManagerDlg(QtGui.QDialog):
 
@@ -54,7 +56,7 @@ class ProjManagerDlg(QtGui.QDialog):
         self.cmdAddFiles.setGeometry(QtCore.QRect(650, 210, 95, 31))
         self.connect(self.cmdAddFiles,QtCore.SIGNAL('clicked()'),self.cmdAddFilesClicked)
         
-        self.listViewFiles = QtGui.QListWidget(self.tabGeneral)
+        self.listViewFiles = file_tree_widget.FileTreeWidget(self.tabGeneral)
         self.listViewFiles.setGeometry(QtCore.QRect(100, 130, 541, 301))
         
         self.tabWidget.addTab(self.tabGeneral, "General")
@@ -165,6 +167,10 @@ class ProjManagerDlg(QtGui.QDialog):
 
         self.proj_file = proj_file
         self.load_project(proj_file)
+        self.listViewFiles.showDirTree(os.path.dirname(self.proj_file))
+        self.listViewFiles.setHeaderHidden(True)
+        self.listFilesAdded = []
+        self.listFilesRemoved = []
 
         self.lineEditOtherArgsEdited(self.lineEditOtherArgs.text())
 
@@ -178,16 +184,53 @@ class ProjManagerDlg(QtGui.QDialog):
 
     def cmdAddFilesClicked(self):
 
-        filenames = QtGui.QFileDialog.getOpenFileNames(self,'Open File',self.parent.current_proj.proj_path,('C Files(*.c);;C++ Files(*.cpp);;Header Files(*h);;All Files(*.*)'))
-        filenames=list(filenames)
-        for _file in  filenames:
-            self.listViewFiles.insertItem(self.listViewFiles.count(),_file)
+        sourceFilenames = QtGui.QFileDialog.getOpenFileNames(self,'Select Files',self.parent.current_proj.proj_path,('C Files(*.c);;C++ Files(*.cpp);;Header Files(*h);;All Files(*.*)'))
+        sourceFilenames =list(sourceFilenames)
+        dest = str(QtGui.QFileDialog.getExistingDirectory(self, 'Select Directory to save',os.path.dirname(self.proj_file)))
+        dirs = dest[len(os.path.dirname(self.proj_file)):].split (os.sep)
+        i = 0
+        if dirs[0] == '':
+            i = 1
+        
+        item = self.listViewFiles.topLevelItem
+        while i < len(dirs):
+            j = 0
+            while j < item.childCount():
+                if item.child(j).text(0) == dirs [i]:
+                    item = item.child(j)
+                    break
+
+                j += 1
+            i += 1
+        for _file in sourceFilenames:
+            child = QtGui.QTreeWidgetItem(item)
+            item.addChild(child)
+            child.setText(0, os.path.basename(str(_file)))
+            self.listFilesAdded.append ((dest,str(_file)))
         
     def cmdAddFileClicked(self):
 
-        filename = str(QtGui.QFileDialog.getSaveFileName(self,'Save File',self.parent.current_proj.proj_path,('C Files(*.c);;C++ Files(*.cpp);;Header Files(*h);;All Files(*.*)')))
-        if filename!='':
-            self.listViewFiles.insertItem(self.listViewFiles.count(),filename)
+        _file = str(QtGui.QFileDialog.getSaveFileName(self,'Save File',self.parent.current_proj.proj_path,('C Files(*.c);;C++ Files(*.cpp);;Header Files(*h);;All Files(*.*)')))
+        if _file!='':
+            dirs = _file[len(os.path.dirname(self.proj_file)) -1:].split (os.sep)
+            i = 0
+            if dirs[0] == '':
+                i = 1
+            
+            item = self.listViewFiles.topLevelItem
+            while i < len(dirs) - 1:
+                j = 0
+                while j < item.childCount():
+                    if item.child(j).text(0) == dirs [i]:
+                        item = item.child(j)
+                        break
+
+                    j += 1
+                i += 1
+            child = QtGui.QTreeWidgetItem(item)
+            item.addChild(child)
+            child.setText(0, dirs[i])
+            self.listFilesAdded.append (_file)
             
     def cmdAddDirClicked(self):
 
@@ -201,6 +244,14 @@ class ProjManagerDlg(QtGui.QDialog):
 
     def cmdRemoveFileClicked (self):
 
+        item = self.listViewFiles.currentItem()
+        path = item.text(0)
+        item = item.parent()
+        while item is not None:
+            path = item.text(0) + os.sep + path
+            item = item.parent()
+
+        self.listFilesRemoved.append(path)
         self.listViewFiles.removeItemWidget(self.listViewFiles.currentItem())
         self.listViewFiles.show()
         
@@ -350,20 +401,11 @@ class ProjManagerDlg(QtGui.QDialog):
         pos_start = string.find("<name>")+6
         pos_end= string.find("</name>")    
         self.lineEditName.setText(string[pos_start:pos_end])
-        
+    
         pos_start = string.find("<type>")+6
         pos_end = string.find("</type>")    
-        self.lblType.setText(string[pos_start:pos_end])      
-                
-        pos_start = 0
-        pos_end = 0
-        pos_start=string.find("<file>",pos_start+1)
-        pos_end=string.find("</file>",pos_end+1)
-        while  pos_start!=-1 and pos_end!=-1:
-            self.listViewFiles.insertItem(self.listViewFiles.count(),string[pos_start+6:pos_end])
-            pos_start=string.find("<file>",pos_start+1)
-            pos_end=string.find("</file>",pos_end+1)
-            
+        self.lblType.setText(string[pos_start:pos_end])
+
         pos_start = string.find("<run_on_ext_console>")+20
         pos_end=string.find("</run_on_ext_console>")
         self.chkRunOnExternalConsole.setChecked(str_to_bool(string[pos_start:pos_end]))

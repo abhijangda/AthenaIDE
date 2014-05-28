@@ -148,6 +148,12 @@ class athena(QtGui.QMainWindow):
         filereload.setShortcut('CTRL+R')
         filereload.setStatusTip('Reloads the current file')
 
+        filepathToClipboard = QtGui.QAction('Copy Filepath to Clipboard',self)
+        self.connect(filepathToClipboard,QtCore.SIGNAL('triggered()'),self.filepathToClipboard)
+        
+        filenameToClipboard = QtGui.QAction('Copy Filename to Clipboard',self)
+        self.connect(filenameToClipboard,QtCore.SIGNAL('triggered()'),self.filenameToClipboard)
+
         filenew = QtGui.QAction(QtGui.QIcon('../icons/new.ico'),'New',self)
 
         exitnt = QtGui.QAction('Exit',self)
@@ -212,20 +218,38 @@ class athena(QtGui.QMainWindow):
         self.connect(findinfile,QtCore.SIGNAL('triggered()'),self.funcfindinfile)
         findinfile.setStatusTip('Find text in a file')
 
-        copyline = QtGui.QAction('Copy Current Line',self)
+        lineOps = QtGui.QAction('Line Operations',self)
+    
+        copyline = QtGui.QAction('Copy Line',self)
         self.connect(copyline,QtCore.SIGNAL('triggered()'),self.funccopyline)
         copyline.setShortcut('SHIFT+CTRL+C')
         copyline.setStatusTip('Copy Current Line')
 
-        cutline = QtGui.QAction('Cut Current Line',self)
+        cutline = QtGui.QAction('Cut Line',self)
         self.connect(cutline,QtCore.SIGNAL('triggered()'),self.funccutline)
         cutline.setShortcut('SHIFT+CTRL+X')
         cutline.setStatusTip('Cut Current Line')
 
-        deleteline = QtGui.QAction('Delete Current Line',self)
+        deleteline = QtGui.QAction('Delete Line',self)
         self.connect(deleteline,QtCore.SIGNAL('triggered()'),self.funcdeleteline)
         deleteline.setShortcut('SHIFT+DEL')
         deleteline.setStatusTip('Delete Current Line')
+
+        moveupline = QtGui.QAction('Move Up Line',self)
+        self.connect(moveupline,QtCore.SIGNAL('triggered()'),self.funcmoveupline)
+        moveupline.setShortcut('CTRL+UP')
+
+        movedownline = QtGui.QAction('Move Down Line',self)
+        self.connect(movedownline,QtCore.SIGNAL('triggered()'),self.funcmovedownline)
+        movedownline.setShortcut('CTRL+DOWN')
+
+        dupupline = QtGui.QAction('Duplicate Above Line',self)
+        self.connect(dupupline,QtCore.SIGNAL('triggered()'),self.funcdupupline)
+        dupupline.setShortcut('SHIFT+CTRL+UP')
+
+        dupdownline = QtGui.QAction('Duplicate Down Line',self)
+        self.connect(dupdownline,QtCore.SIGNAL('triggered()'),self.funcdupdownline)
+        dupdownline.setShortcut('SHIFT+CTRL+DOWN')
 
         regexpsearch = QtGui.QAction('Regular Expression Search',self)
         self.connect(regexpsearch,QtCore.SIGNAL('triggered()'),self.funcregexpsearch)
@@ -460,13 +484,16 @@ class athena(QtGui.QMainWindow):
         filemenu.addAction(newfileaction)
         filemenu.addAction(newtab)
         filemenu.addAction(openfile)
-        filemenu.addAction(filereload)
         filemenu.addSeparator()
         filemenu.addAction(filesave)
         filemenu.addAction(filesaveas)
         filemenu.addAction(filesaveall)
         filemenu.addAction(filesaveallas)
         filemenu.addAction(filesavecopyas)
+        filemenu.addSeparator()
+        filemenu.addAction(filereload)
+        filemenu.addAction(filepathToClipboard)
+        filemenu.addAction(filenameToClipboard)
         filemenu.addSeparator()
         filemenu.addAction(fileprint)
         filemenu.addAction(removetab)
@@ -492,9 +519,16 @@ class athena(QtGui.QMainWindow):
         editmenu.addAction(findselectedtext)
         editmenu.addAction(regexpsearch)
         editmenu.addSeparator()
-        editmenu.addAction(copyline)
-        editmenu.addAction(cutline)
-        editmenu.addAction(deleteline)
+        editmenu.addAction(lineOps)
+        lineOpsMenu = QtGui.QMenu()
+        lineOps.setMenu(lineOpsMenu)
+        lineOpsMenu.addAction(copyline)
+        lineOpsMenu.addAction(cutline)
+        lineOpsMenu.addAction(deleteline)
+        lineOpsMenu.addAction(moveupline)
+        lineOpsMenu.addAction(movedownline)
+        lineOpsMenu.addAction(dupupline)
+        lineOpsMenu.addAction(dupdownline)
         editmenu.addSeparator()
         editmenu.addAction(datentime)
         editmenu.addSeparator()
@@ -1404,39 +1438,20 @@ class athena(QtGui.QMainWindow):
 
         if state==1:
             self.current_proj.proj_name = str(self.winprojmanager.lineEditName.text())
-            self.projectTreeItem.setText(0,self.current_proj.proj_name)
-
-            newprojfilepatharray = []
-            for i in range(self.winprojmanager.listViewFiles.count()):
-                newprojfilepatharray.append(str(self.winprojmanager.listViewFiles.item(i).text()))
-
-            if newprojfilepatharray != self.current_proj.list_files:
-                if len(newprojfilepatharray) == len(self.current_proj.list_files):
-                    for i in range(len(newprojfilepatharray)):
-                        self.projtreeitemarray[i].setText(0,self.getprojfilename(newprojfilepatharray[i]))
-
-                if len(newprojfilepatharray) < len(self.current_proj.list_files):
-                    self.projectTree.clear()
-                    self.projectTreeItem = QtGui.QTreeWidgetItem(self.projectTree)
-                    self.projectTreeItem.setText(0,self.current_proj.proj_name)
-                    self.projtreeitemarray=[]
-                    for i in range(len(newprojfilepatharray)):
-                        self.projtreeitemarray.append(QtGui.QTreeWidgetItem(self.projectTreeItem))
-                        self.projtreeitemarray[len(self.projtreeitemarray)-1].setText(0,self.getprojfilename(newprojfilepatharray[len(self.projtreeitemarray)-1]))
-
-                if len(newprojfilepatharray) > len(self.current_proj.list_files):
-                    for i in range(len(self.current_proj.list_files)):
-                        self.projtreeitemarray[i].setText(0,self.getprojfilename(newprojfilepatharray[i]))
-
-                    for i in range(len(newprojfilepatharray)-len(self.current_proj.list_files)):
-                        self.projtreeitemarray.append(QtGui.QTreeWidgetItem(self.projectTreeItem))
-                        self.projtreeitemarray[len(self.projtreeitemarray)-1].setText(0,self.getprojfilename(newprojfilepatharray[len(self.projtreeitemarray)-1]))
-
-                for _file in newprojfilepatharray:
-                    if os.path.exists (_file) == False:
-                        f = open (_file, "w")
-                        f.write ('')
-                        f.close ()
+            for _file in self.winprojmanager.listFilesAdded:
+                if type(_file) is str:
+                    f = open(_file, "w")
+                    f.write("")
+                    f.close()
+                elif type(_file) is tuple:
+                    shutil.copy(_file[1], _file[0])
+            print "sdfsdfsdfsdfssdfsdfs"
+            self.projectTree.clear()
+            self.fileTree.clear()
+            self.projectTree.setColumnCount(1)
+            print 'dddd', self.current_proj.proj_path
+            filelist = self.fileTree.showDirTree(self.current_proj.proj_path)
+            self.projectTree.showFiles (filelist, self.current_proj.proj_name)
 
             self.current_proj.compile_only=self.winprojmanager.chkS.isChecked()
             self.current_proj.disable_inline=self.winprojmanager.chkfnoasm.isChecked()
@@ -1450,7 +1465,6 @@ class athena(QtGui.QMainWindow):
             self.current_proj.other_args=str(self.winprojmanager.lineEditOtherArgs.text())
             self.current_proj.params=str(self.winprojmanager.lineEditParams.text())
             self.current_proj.run_on_ext_console=bool (self.winprojmanager.chkRunOnExternalConsole.isChecked())
-            print self.current_proj.run_on_ext_console
             self.current_proj.list_dir=[]
             for i in range(self.winprojmanager.listViewDirs.count()):
                 _dir = str(self.winprojmanager.listViewDirs.item(i).text())
@@ -1460,7 +1474,6 @@ class athena(QtGui.QMainWindow):
             self.current_proj.list_env_var=""
             self.current_proj.curr_dir = str(self.winprojmanager.lineEditCurrDir.text())
             self.current_proj.out_dir = str(self.winprojmanager.lineEditOutDir.text())
-            self.current_proj.list_files = newprojfilepatharray
             self.current_proj.write_to_file()
 
     def funcclassbrowser(self):
@@ -2895,6 +2908,14 @@ dist_noinst_SCRIPTS = autogen.sh
             savedialog()
         self.tabs.setCurrentIndex(current_index)
 
+    def filepathToClipboard(self):
+        clipboard = QtGui.QApplication.clipboard()
+        clipboard.setText(self.txtarray[self.tabs.currentIndex()].filename)
+    
+    def filenameToClipboard(self):
+        clipboard = QtGui.QApplication.clipboard()
+        clipboard.setText(os.path.basename(self.txtarray[self.tabs.currentIndex()].filename))
+        
     def filereload(self):
         f = open (self.txtarray[self.tabs.currentIndex()].filepath, "r")
         s = ""
@@ -3168,7 +3189,7 @@ dist_noinst_SCRIPTS = autogen.sh
         cc.select(cc.LineUnderCursor)
         txtInput.setTextCursor(cc)
         txtInput.cut()
-    
+
     def funccopyline(self):
         txtInput = self.txtarray[self.tabs.currentIndex()].txtInput
         cc = txtInput.textCursor()
@@ -3183,6 +3204,48 @@ dist_noinst_SCRIPTS = autogen.sh
         txtInput.setTextCursor(cc)
         txtInput.textCursor().removeSelectedText()
 
+    def funcmoveupline(self):
+        txtInput = self.txtarray[self.tabs.currentIndex()].txtInput
+        cc = txtInput.textCursor()
+        cc.select(cc.LineUnderCursor)
+        text = cc.selectedText()
+        cc.removeSelectedText()
+        cc.movePosition(cc.StartOfLine, cc.MoveAnchor)
+        cc.movePosition(cc.Up, cc.MoveAnchor)
+        cc.insertText(str(text)+"\n")
+        cc = txtInput.textCursor()
+        cc.deleteChar()
+
+    def funcmovedownline(self):
+        txtInput = self.txtarray[self.tabs.currentIndex()].txtInput
+        cc = txtInput.textCursor()
+        cc.select(cc.LineUnderCursor)
+        text = cc.selectedText()
+        cc.removeSelectedText()
+        cc.deleteChar()
+        cc.movePosition(cc.Down, cc.MoveAnchor)
+        cc.movePosition(cc.StartOfLine, cc.MoveAnchor)
+        cc.insertText(str(text)+"\n")
+        cc = txtInput.textCursor()
+
+    def funcdupupline(self):
+        txtInput = self.txtarray[self.tabs.currentIndex()].txtInput
+        cc = txtInput.textCursor()
+        cc.select(cc.LineUnderCursor)
+        text = cc.selectedText()
+        cc.movePosition(cc.EndOfLine, cc.MoveAnchor)
+        cc.movePosition(cc.Up, cc.MoveAnchor)
+        cc.insertText("\n"+str(text))
+    
+    def funcdupdownline(self):
+        txtInput = self.txtarray[self.tabs.currentIndex()].txtInput
+        cc = txtInput.textCursor()
+        cc.select(cc.LineUnderCursor)
+        text = cc.selectedText()
+        cc.movePosition(cc.StartOfLine, cc.MoveAnchor)
+        cc.movePosition(cc.Down, cc.MoveAnchor)
+        cc.insertText(str(text)+"\n")
+    
     def dattime(self):
 
         txtInput = self.txtarray[self.tabs.currentIndex()].txtInput
@@ -3314,6 +3377,7 @@ dist_noinst_SCRIPTS = autogen.sh
         self.winfind.connect(self.winfind.cmdfind, QtCore.SIGNAL('clicked()'),funcfind)
         self.winfind.connect(self.winfind.cmdclose, QtCore.SIGNAL('clicked()'),self.winfind.close)
         self.winfind.setWindowTitle("Find")
+        self.winfind.cmdfind.setDefault()
         self.winfind.show()
 
     def openfindandreplace(self):
@@ -3434,6 +3498,7 @@ dist_noinst_SCRIPTS = autogen.sh
         self.winfindandreplace.connect(self.winfindandreplace.cmdreplace, QtCore.SIGNAL('clicked()'),replace)
         self.winfindandreplace.connect(self.winfindandreplace.cmdreplaceall, QtCore.SIGNAL('clicked()'),replaceall)
         self.winfindandreplace.connect(self.winfindandreplace.cmdclose, QtCore.SIGNAL('clicked()'),self.winfindandreplace.close)
+        self.winfindandreplace.cmdreplaceall.setDefault()
 
     def fold_all_functions_triggered(self):
 
@@ -3516,6 +3581,7 @@ dist_noinst_SCRIPTS = autogen.sh
         dialog_print.exec_()
 
 app = QtGui.QApplication(sys.argv)
+#app.setFont(QtGui.QFont(app.font().family(), 10))
 nt = athena()
 nt.show()
 app.exec_()

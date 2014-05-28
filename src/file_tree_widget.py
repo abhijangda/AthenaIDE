@@ -9,7 +9,6 @@ class FileTreeWidget(QtGui.QTreeWidget):
         self.rootDir = ""
         self.topLevelItem = None
         self.itemDoubleClicked.connect(self.treeDoubleClicked)
-        self.filelist = []
     
     def treeDoubleClicked(self, item, index):
 
@@ -23,8 +22,9 @@ class FileTreeWidget(QtGui.QTreeWidget):
             self.emit(QtCore.SIGNAL('openFileTree(QString)'),QtCore.QString(path))
 
     def showDirTree(self, directory):
-        
+        print 'passed', directory
         self.rootDir = directory
+        self.filelist = []
         self._showDirTree(directory, None)
         self.filelist.sort()
         return self.filelist
@@ -32,6 +32,10 @@ class FileTreeWidget(QtGui.QTreeWidget):
     def addTopLevelItem(self, item):
         self.topLevelItem = item
         super(FileTreeWidget, self).addTopLevelItem(item)
+
+    def clear(self):
+        self.topLevelItem = None
+        super(FileTreeWidget, self).clear()
 
     def _addItem(self, directory, parent = None):
         item = QtGui.QTreeWidgetItem(None)
@@ -50,6 +54,7 @@ class FileTreeWidget(QtGui.QTreeWidget):
         filelist = []
         if directory [-1] == os.sep:
             directory = directory [:-1]
+        print directory
         _item = self._addItem(os.path.basename(directory), item)
         listdir = os.listdir(directory)
         for _dir in listdir:
@@ -62,5 +67,6 @@ class FileTreeWidget(QtGui.QTreeWidget):
                 #self._addItem(os.path.basename(dirpath), _item)
                 filelist.append(dirpath)
                 self.filelist.append (dirpath)
-        for f in filelist.sort():
+        filelist.sort()
+        for f in filelist:
             self._addItem(os.path.basename(f), _item)
