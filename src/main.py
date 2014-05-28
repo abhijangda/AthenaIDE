@@ -154,6 +154,15 @@ class athena(QtGui.QMainWindow):
         filenameToClipboard = QtGui.QAction('Copy Filename to Clipboard',self)
         self.connect(filenameToClipboard,QtCore.SIGNAL('triggered()'),self.filenameToClipboard)
 
+        filerename = QtGui.QAction('Rename File',self)
+        self.connect(filerename,QtCore.SIGNAL('triggered()'),self.filerename)
+    
+        filedelete = QtGui.QAction('Delete File',self)
+        self.connect(filedelete,QtCore.SIGNAL('triggered()'),self.filedelete)
+
+        fileopenall = QtGui.QAction('Delete File',self)
+        self.connect(fileopenall,QtCore.SIGNAL('triggered()'),self.fileopenall)
+
         filenew = QtGui.QAction(QtGui.QIcon('../icons/new.ico'),'New',self)
 
         exitnt = QtGui.QAction('Exit',self)
@@ -198,25 +207,6 @@ class athena(QtGui.QMainWindow):
 
         datentime = QtGui.QAction('Insert Date and Time',self)
         self.connect(datentime,QtCore.SIGNAL('triggered()'),self.dattime)
-
-        find = QtGui.QAction(QtGui.QIcon('../icons/find.png'),'Find',self)
-        self.connect(find,QtCore.SIGNAL('triggered()'),self.openfind)
-        find.setShortcut('CTRL+F')
-        find.setStatusTip('Find text in current file')
-
-        findandreplace = QtGui.QAction(QtGui.QIcon('../icons/findandreplace.png'),'Find And Replace',self)
-        self.connect(findandreplace,QtCore.SIGNAL('triggered()'),self.openfindandreplace)
-        findandreplace.setShortcut('CTRL+R')
-        findandreplace.setStatusTip('Find and Replace text in current file')
-
-        findselectedtext = QtGui.QAction('Find Selected Text',self)
-        self.connect(findselectedtext,QtCore.SIGNAL('triggered()'),self.funcfindselected)
-        findselectedtext.setShortcut('CTRL+SHIFT+F')
-        findselectedtext.setStatusTip('Find currently selected text in current file')
-
-        findinfile = QtGui.QAction('Find in file',self)
-        self.connect(findinfile,QtCore.SIGNAL('triggered()'),self.funcfindinfile)
-        findinfile.setStatusTip('Find text in a file')
 
         lineOps = QtGui.QAction('Line Operations',self)
     
@@ -270,6 +260,34 @@ class athena(QtGui.QMainWindow):
 
         auto_complete = QtGui.QAction('Auto Complete',self)
         self.connect(auto_complete,QtCore.SIGNAL('triggered()'),self.auto_complete_triggered)
+
+        #Find Menu
+        find = QtGui.QAction(QtGui.QIcon('../icons/find.png'),'Find',self)
+        self.connect(find,QtCore.SIGNAL('triggered()'),self.openfind)
+        find.setShortcut('CTRL+F')
+        find.setStatusTip('Find text in current file')
+        
+        findnext = QtGui.QAction(QtGui.QIcon('../icons/find.png'),'Find Next',self)
+        self.connect(findnext,QtCore.SIGNAL('triggered()'),self.findnext)
+        findnext.setShortcut('CTRL+G')
+        
+        findprevious = QtGui.QAction(QtGui.QIcon('../icons/find.png'),'Find Previous',self)
+        self.connect(findprevious,QtCore.SIGNAL('triggered()'),self.findprevious)
+        findprevious.setShortcut('SHIFT+CTRL+G')
+
+        findandreplace = QtGui.QAction(QtGui.QIcon('../icons/findandreplace.png'),'Find And Replace',self)
+        self.connect(findandreplace,QtCore.SIGNAL('triggered()'),self.openfindandreplace)
+        findandreplace.setShortcut('CTRL+R')
+        findandreplace.setStatusTip('Find and Replace text in current file')
+
+        findselectedtext = QtGui.QAction('Find Selected Text',self)
+        self.connect(findselectedtext,QtCore.SIGNAL('triggered()'),self.funcfindselected)
+        findselectedtext.setShortcut('CTRL+SHIFT+F')
+        findselectedtext.setStatusTip('Find currently selected text in current file')
+
+        findinfile = QtGui.QAction('Find in file',self)
+        self.connect(findinfile,QtCore.SIGNAL('triggered()'),self.funcfindinfile)
+        findinfile.setStatusTip('Find text in a file')
 
         #Format Menu
         changefont = QtGui.QAction('Font',self)
@@ -484,6 +502,7 @@ class athena(QtGui.QMainWindow):
         filemenu.addAction(newfileaction)
         filemenu.addAction(newtab)
         filemenu.addAction(openfile)
+        filemenu.addAction(fileopenall)
         filemenu.addSeparator()
         filemenu.addAction(filesave)
         filemenu.addAction(filesaveas)
@@ -492,6 +511,9 @@ class athena(QtGui.QMainWindow):
         filemenu.addAction(filesavecopyas)
         filemenu.addSeparator()
         filemenu.addAction(filereload)
+        filemenu.addAction(filerename)
+        filemenu.addAction(filedelete)
+        filemenu.addSeparator()
         filemenu.addAction(filepathToClipboard)
         filemenu.addAction(filenameToClipboard)
         filemenu.addSeparator()
@@ -513,12 +535,6 @@ class athena(QtGui.QMainWindow):
         editmenu.addAction(select_current_function)
         editmenu.addAction(selectall)
         editmenu.addSeparator()
-        editmenu.addAction(find)
-        editmenu.addAction(findandreplace)
-        editmenu.addAction(findinfile)
-        editmenu.addAction(findselectedtext)
-        editmenu.addAction(regexpsearch)
-        editmenu.addSeparator()
         editmenu.addAction(lineOps)
         lineOpsMenu = QtGui.QMenu()
         lineOps.setMenu(lineOpsMenu)
@@ -538,6 +554,19 @@ class athena(QtGui.QMainWindow):
         editmenu.addAction(fold_current_function)
         editmenu.addSeparator()
         editmenu.addAction(auto_complete)
+
+        findmenu = menubar.addMenu('Search')
+        findmenu.addAction(find)
+        findmenu.addAction(findnext)
+        findmenu.addAction(findprevious)
+        findmenu.addSeparator()
+        findmenu.addAction(findinfile)
+        findmenu.addSeparator()
+        findmenu.addAction(findselectedtext)
+        findmenu.addSeparator()
+        findmenu.addAction(regexpsearch)
+        findmenu.addSeparator()
+        findmenu.addAction(findandreplace)
 
         formatmenu = menubar.addMenu('F&ormat')
         formatmenu.addAction(changefont)
@@ -2915,7 +2944,16 @@ dist_noinst_SCRIPTS = autogen.sh
     def filenameToClipboard(self):
         clipboard = QtGui.QApplication.clipboard()
         clipboard.setText(os.path.basename(self.txtarray[self.tabs.currentIndex()].filename))
-        
+    
+    def filedelete(self):
+        pass
+    
+    def filerename(self):
+        pass
+
+    def fileopenall(self):
+        pass
+
     def filereload(self):
         f = open (self.txtarray[self.tabs.currentIndex()].filepath, "r")
         s = ""
@@ -3345,17 +3383,38 @@ dist_noinst_SCRIPTS = autogen.sh
 
         self.winfindinfile.show()
 
+    def findnext(self):
+        txtInput = self.txtarray[self.tabs.currentIndex()].txtInput
+        if hasattr(self, 'tofind') and self.tofind != "":
+            if self.tofindflags is not None:
+                txtInput.find(self.winfind.txtfind.text(), self.tofindflags)
+            else:
+                txtInput.find(self.winfind.txtfind.text())
+            
+    def findprevious(self):
+        txtInput = self.txtarray[self.tabs.currentIndex()].txtInput
+        if hasattr(self, 'tofind') and self.tofind != "":
+            if self.tofindflags is not None:
+                txtInput.find(self.winfind.txtfind.text(), self.tofindflags and QtGui.QTextDocument.FindBackward)
+            else:
+                txtInput.find(self.winfind.txtfind.text(), QtGui.QTextDocument.FindBackward)
+
     def openfind(self):
 
         def funcfind():
 
             txtInput = self.txtarray[self.tabs.currentIndex()].txtInput
+            self.tofind = str(self.winfind.txtfind.text())
+            self.tofindflags = None
             if self.winfind.optwholeword.isChecked() == True:
                 d = txtInput.find(self.winfind.txtfind.text(),QtGui.QTextDocument.FindWholeWords)
+                self.tofindflags = QtGui.QTextDocument.FindWholeWords
             if self.winfind.optcase.isChecked() == True:
                 d = txtInput.find(self.winfind.txtfind.text(),QtGui.QTextDocument.FindCaseSensitively)
+                self.tofindflags = QtGui.QTextDocument.FindCaseSensitively
             if self.winfind.optwholeword.isChecked() == True and self.winfind.optcase.isChecked() == True:
                 d = txtInput.find(self.winfind.txtfind.text(),QtGui.QTextDocument.FindCaseSensitively and QtGui.QTextDocument.FindWholeWords)
+                self.tofindflags = QtGui.QTextDocument.FindCaseSensitively and QtGui.QTextDocument.FindWholeWords
             if self.winfind.optwholeword.isChecked() == False and self.winfind.optcase.isChecked() == False:
                 d = txtInput.find(self.winfind.txtfind.text())
             return d
@@ -3377,7 +3436,7 @@ dist_noinst_SCRIPTS = autogen.sh
         self.winfind.connect(self.winfind.cmdfind, QtCore.SIGNAL('clicked()'),funcfind)
         self.winfind.connect(self.winfind.cmdclose, QtCore.SIGNAL('clicked()'),self.winfind.close)
         self.winfind.setWindowTitle("Find")
-        self.winfind.cmdfind.setDefault()
+        self.winfind.cmdfind.setDefault(True)
         self.winfind.show()
 
     def openfindandreplace(self):
