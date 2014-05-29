@@ -678,9 +678,11 @@ class athena(QtGui.QMainWindow):
         buildmenu = menubar.addMenu('&Build')
 
         self.compile = QtGui.QAction('Compile File',self)
-        self.build_proj = QtGui.QAction('Build Project',self)
-
+        self.build_proj = QtGui.QAction('Build Project', self)
         self.connect(self.build_proj, QtCore.SIGNAL('triggered()'), self.build_proj_triggered)
+
+        self.rebuild_proj = QtGui.QAction('Rebuild Project',self)
+        self.connect(self.rebuild_proj, QtCore.SIGNAL('triggered()'), self.rebuild_proj_triggered)
 
         self.clean_build = QtGui.QAction('Clean Build' ,self)
         self.connect(self.clean_build, QtCore.SIGNAL('triggered()'), self.clean_build_triggered )
@@ -696,6 +698,7 @@ class athena(QtGui.QMainWindow):
         buildmenu.addAction(cmdgppcompile)
         buildmenu.addSeparator()
         buildmenu.addAction(self.build_proj)
+        buildmenu.addAction(self.rebuild_proj)
         buildmenu.addSeparator()
         buildmenu.addAction(self.clean_build)
         buildmenu.addAction(self.clean_src)
@@ -2311,7 +2314,16 @@ class athena(QtGui.QMainWindow):
                 QtGui.QMessageBox.information (self, "AthenaIDE", "Cannot build project make sure all files exists", QtGui.QMessageBox.Ok)
                 return
 
-            self.runcompiler.build_project(self.current_proj,self.txtarray,self.tabs,self.tracktabsarray)
+            self.runcompiler.build_project(self.current_proj,self.txtarray,self.tabs)
+
+    def rebuild_proj_triggered(self):
+
+        if self.mode == "Project":
+            if self.check_build_files () == False:
+                QtGui.QMessageBox.information (self, "AthenaIDE", "Cannot build project make sure all files exists", QtGui.QMessageBox.Ok)
+                return
+
+            self.runcompiler.rebuild_project(self.current_proj,self.txtarray,self.tabs)
 
     def clean_src_triggered(self):
 

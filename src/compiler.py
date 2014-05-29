@@ -161,24 +161,14 @@ class compilerclass(QtGui.QDialog):
             txt_filename = self.txtinputarray[i].filename
             txt_filename = txt_filename [txt_filename.rfind ('/') + 1:]            
             if txt_filename == filename:
-                print i
                 break
 
         if i != len(self.txtinputarray):
-            if self.tabstrackarray == []:
-                self.tabs.setCurrentIndex(i)
-                cc = self.txtinputarray[i].txtInput.textCursor()
-                cc.setLine(line_number + 1)
-                self.txtinputarray[i].txtInput.setTextCursor(cc)
-                self.txtinputarray[i].txtInput.highlightcurrentline()
-            else:
-                   
-                tabindex = i
-                self.tabs.setCurrentIndex(tabindex)
-                cc = self.txtinputarray[tabindex].txtInput.textCursor()
-                cc.setLine(line_number + 1)
-                self.txtinputarray[tabindex].txtInput.setTextCursor(cc)
-                self.txtinputarray[tabindex].txtInput.highlightcurrentline()
+            self.tabs.setCurrentIndex(i)
+            cc = self.txtinputarray[i].txtInput.textCursor()
+            cc.setLine(line_number + 1)
+            self.txtinputarray[i].txtInput.setTextCursor(cc)
+            self.txtinputarray[i].txtInput.highlightcurrentline()
             
     def showerroutput(self,s):
 
@@ -186,17 +176,17 @@ class compilerclass(QtGui.QDialog):
         err_array = s.split('\n')
         self.listerroutput.addItems(err_array)
 
-    def gcccompiler_run_debug(self,filename,compilefilename,mode,txtinputarray,tabs,tabstrackarray,command=""):
+    def gcccompiler_run_debug(self,filename,compilefilename,mode,tabs,command=""):
 
         self.run_debug_automatically = True
-        self.gcccompiler(filename,compilefilename,mode,txtinputarray,tabs,tabstrackarray,command)
+        self.gcccompiler(filename,compilefilename,mode,txtinputarray,tabs,command)
         
-    def gcccompiler_run(self,filename,compilefilename,mode,txtinputarray,tabs,tabstrackarray,command=""):
+    def gcccompiler_run(self,filename,compilefilename,mode,txtinputarray,tabs,command=""):
 
         self.run_automatically = True
-        self.gcccompiler(filename,compilefilename,mode,txtinputarray,tabs,tabstrackarray,command)        
+        self.gcccompiler(filename,compilefilename,mode,txtinputarray,tabs,command)        
         
-    def gcccompiler(self,filename,compilefilename,mode,txtinputarray,tabs,tabstrackarray,command=""):
+    def gcccompiler(self,filename,compilefilename,mode,txtinputarray,tabs,command=""):
         
         self.compilerused ='GCC'
         cmd = ''
@@ -208,7 +198,6 @@ class compilerclass(QtGui.QDialog):
             self.compilefilename = ''
             self.txtinputarray = txtinputarray
             self.tabs = tabs
-            self.tabstrackarray = tabstrackarray           
             
             if mode == 'File':
                 cmd = self.gcccommand
@@ -230,17 +219,39 @@ class compilerclass(QtGui.QDialog):
         else:        
             msg_box = QtGui.QMessageBox.information(self,'GNU C Compiler','Please set command for GNU C Compiler',QtGui.QMessageBox.Ok)
 
-    def build_project(self,project,txtinputarray,tabs,tabstrackarray):
+    def begin_build(self):
 
+        if self.makefileam_path != '':
+            curr_dir = os.getcwd()
+            os.chdir(self.project.proj_path)
+            p = subprocess.Popen('make',shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            self.output = unicode(p.stderr.read(),'utf-8')            
+            self.status = 1
+            
+            if self.output.find('make: *** No targets specified and no makefile found.  Stop.') != -1:
+                p = subprocess.Popen(self.autogen_path,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+                self.output = unicode(p.stderr.read(),'utf-8')
+                if self.output.find('error:') == -1:
+                    self.status = 0
+            elif self.output.find('error:') != -1:
+                self.status = 1
+                
+            if self.status == 0:               
+                p = subprocess.Popen('make',shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)                
+                self.output = unicode(p.stderr.read(),'utf-8')
+
+            os.chdir(curr_dir)
+    
+    
+    def build_project(self, project,txtinputarray,tabs):
+        self.makefileam_path = ""
         if project.proj_path !="":
             self.project = project
-            self.autogen_path = os.path.join(project.proj_path,"autogen.sh")
             self.configure_path = os.path.join(project.proj_path,"configure.ac")
             self.makefileam_path = os.path.join(project.proj_path,"Makefile.am")
             
             self.txtinputarray = txtinputarray
-            self.tabs = tabs            
-            self.tabstrackarray = tabstrackarray           
+            self.tabs = tabs
             
             compiler = ""
             f = open (self.configure_path, "r")
@@ -268,8 +279,46 @@ class compilerclass(QtGui.QDialog):
             self.thread = Thread(self.begin_build)
             self.connect(self.thread, QtCore.SIGNAL('finished()'),self.build_callback)
             self.thread.start()
+    
+    def rebuild_project(self,project,txtinputarray,tabs):
+
+        if project.proj_path !="":
+            self.project = project
+            self.autogen_path = os.path.join(project.proj_path,"autogen.sh")
+            self.configure_path = os.path.join(project.proj_path,"configure.ac")
+            self.makefileam_path = os.path.join(project.proj_path,"Makefile.am")
             
-    def begin_build(self):
+            self.txtinputarray = txtinputarray
+            self.tabs = tabs
+            
+            compiler = ""
+            f = open (self.configure_path, "r")
+            s = f.read ()
+            f.close ()
+            
+            if s.find ("AC_PROG_CC")!=-1:
+                compiler = "GNU C Compiler(GCC) "
+            if s.find ("AC_PROG_CXX")!=-1:
+                compiler += "GNU C++ Compiler(G++)"
+            self.lblcompiler.setText (compiler)
+            compilefilename = ""
+            
+            f = open (self.makefileam_path, "r")
+            s = f.read ()
+            f.close ()
+                    
+            compilefilename = s [s.find ("bin_PROGRAMS")+len ("bin_PROGRAMS"):]
+            compilefilename = compilefilename [:compilefilename.find ('\n')].replace ('=', '').strip ()            
+            self.compilefilename = os.path.join (project.proj_path, compilefilename.split (' ') [0])           
+            self.lblcompiled.setText(self.compilefilename)
+            self.listerroutput.clear()
+            self.listerroutput.addItem('Compiling Please Wait...')
+            self.show()
+            self.thread = Thread(self.rebegin_build)
+            self.connect(self.thread, QtCore.SIGNAL('finished()'),self.build_callback)
+            self.thread.start()
+            
+    def rebegin_build(self):
 
         if self.autogen_path != '':
             curr_dir = os.getcwd()
@@ -354,17 +403,17 @@ class compilerclass(QtGui.QDialog):
         if self.olddir !='':
             os.chdir(self.olddir)
 
-    def gppcompiler_run_debug(self,filename,compilefilename,mode,txtinputarray,tabs,tabstrackarray,projtimes=[],command=""):
+    def gppcompiler_run_debug(self,filename,compilefilename,mode,txtinputarray,tabs,projtimes=[],command=""):
 
         self.run_debug_automatically = True
-        self.gppcompiler(filename,compilefilename,mode,txtinputarray,tabs,tabstrackarray,projtimes,command)        
+        self.gppcompiler(filename,compilefilename,mode,txtinputarray,tabs,projtimes,command)        
 
-    def gppcompiler_run(self,filename,compilefilename,mode,txtinputarray,tabs,tabstrackarray,projtimes=[],command=""):
+    def gppcompiler_run(self,filename,compilefilename,mode,txtinputarray,tabs,projtimes=[],command=""):
 
         self.run_automatically = True
-        self.gppcompiler(filename,compilefilename,mode,txtinputarray,tabs,tabstrackarray,projtimes,command)        
+        self.gppcompiler(filename,compilefilename,mode,txtinputarray,tabs,projtimes,command)        
         
-    def gppcompiler(self,filename,compilefilename,mode,txtinputarray,tabs,tabstrackarray,projtimes=[],command=""):
+    def gppcompiler(self,filename,compilefilename,mode,txtinputarray,tabs,projtimes=[],command=""):
         
         self.compilerused ='G++' 
         cmd = ''
@@ -376,7 +425,6 @@ class compilerclass(QtGui.QDialog):
             self.compilefilename = ''
             self.txtinputarray = txtinputarray
             self.tabs = tabs
-            self.tabstrackarray = tabstrackarray
             
             for d in commandsplit:
                 if d == '<input>':
