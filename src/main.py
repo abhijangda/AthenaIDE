@@ -436,6 +436,8 @@ class athena(QtGui.QMainWindow):
         projectmanager = QtGui.QAction(QtGui.QIcon('../icons/project_options.png'),'Project Preferences',self)
         projectmanager.setStatusTip('Edit Project Name, Type and Files')
 
+        recentProjects = QtGui.QAction("Recent Projects", self)
+        
         self.arrfname = [fname1,fname2,fname3,fname4,fname5]
 
         self.arrfpathname = []
@@ -642,22 +644,26 @@ class athena(QtGui.QMainWindow):
         self.navigationmenu.addAction(clear_bookmark)
         self.navigationmenu.addSeparator()
 
-        projectmenu = menubar.addMenu('&Project')
-        projectmenu.addAction(newprojectaction)
-        projectmenu.addAction(openproj)
-        projectmenu.addSeparator()
-        projectmenu.addAction(self.addnew)
-        projectmenu.addAction(self.addexisting)
-        projectmenu.addSeparator()
-        projectmenu.addAction(save_project)
-        projectmenu.addAction(save_project_as)
-        projectmenu.addAction(save_project_copy_as)
-        projectmenu.addSeparator()
-        projectmenu.addAction(empty_project)
-        projectmenu.addAction(close_project)
-        projectmenu.addSeparator()
-        projectmenu.addAction(projectmanager)
-
+        self.projectmenu = menubar.addMenu('&Project')
+        self.projectmenu.addAction(newprojectaction)
+        self.projectmenu.addAction(openproj)
+        self.projectmenu.addSeparator()
+        self.projectmenu.addAction(self.addnew)
+        self.projectmenu.addAction(self.addexisting)
+        self.projectmenu.addSeparator()
+        self.projectmenu.addAction(save_project)
+        self.projectmenu.addAction(save_project_as)
+        self.projectmenu.addAction(save_project_copy_as)
+        self.projectmenu.addSeparator()
+        self.projectmenu.addAction(empty_project)
+        self.projectmenu.addAction(close_project)
+        self.projectmenu.addSeparator()
+        self.projectmenu.addAction(projectmanager)
+        self.projectmenu.addSeparator()
+        self.projectmenu.addAction(recentProjects)
+        self.recentProjMenu = QtGui.QMenu(self)
+        recentProjects.setMenu(self.recentProjMenu)
+        
         self.connect(go_to_matching_brace,QtCore.SIGNAL('triggered()'),self.go_to_matching_brace_triggered)
         self.connect(back_line,QtCore.SIGNAL('triggered()'),self.funcbackline)
         self.connect(forward_line,QtCore.SIGNAL('triggered()'),self.funcforwardline)
@@ -936,6 +942,8 @@ class athena(QtGui.QMainWindow):
         if self.wordwrap=='True':
             self.txtarray[self.tabs.currentIndex()].txtInput.setLineWrapMode(QtGui.QTextEdit.WidgetWidth)
 
+        self.recentProjectsAction = []
+
         if self.recentfiles == 'True':
             try:
                 f = open('./recentfiles.ini','r')
@@ -951,9 +959,18 @@ class athena(QtGui.QMainWindow):
                     for j in range(index+len('<file>'),text.index('</file>',index)):
                         filepath = filepath + text[j]
                     self.updatefilemenu(filepath)
+
+                for i in range(text.count('<proj')):
+                    filepath = ''
+                    index = text.index('<proj>',index+1)
+                    for j in range(index+len('<proj>'),text.index('</proj>',index)):
+                        filepath = filepath + text[j]
+
+                    self.updateRecentProjects(filepath, False)
                 self.canwrite_recentfiles = True
             except:
                 pass
+                
         self.filedialogdir = ''
 
     def setFilePointer(self,filepath,line):
@@ -1863,8 +1880,11 @@ class athena(QtGui.QMainWindow):
 
         projpath = ''
         projpath = str(QtGui.QFileDialog.getOpenFileName(self,'Open Project',self.filedialogdir,('C Project Files(*.cproj);;C++ Project Files(*.cppproj);;All Files(*.*)')))
-
+        self.openProject(projpath)
+        
+    def openProject(self, projpath):
         if projpath != '':
+            self.updateRecentProjects(projpath)
             self.projCompiledTimes=[0]
             filedialogdir = self.getdir(str(projpath))
 
@@ -2708,6 +2728,25 @@ dist_noinst_SCRIPTS = autogen.sh
 
         pass
 
+    def recentActionCalled(self):
+
+        self.openProject (str(self.sender().text()))
+
+    def updateRecentProjects(self, proj, write=True):
+        for action in self.recentProjectsAction:
+            if str(action.text()) == str(proj):
+                return
+
+        action = QtGui.QAction(proj, self)
+        self.connect(action, QtCore.SIGNAL("triggered()"), self.recentActionCalled)
+        self.recentProjMenu.addAction(action)
+        self.recentProjectsAction.append(action)
+
+        if write:
+            f = open('./recentfiles.ini', 'a')
+            f.write("<proj>%s</proj>"%proj)
+            f.close()
+        
     def updatefilemenu(self, filename):
 
         try:

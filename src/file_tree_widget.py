@@ -22,7 +22,6 @@ class FileTreeWidget(QtGui.QTreeWidget):
             self.emit(QtCore.SIGNAL('openFileTree(QString)'),QtCore.QString(path))
 
     def showDirTree(self, directory):
-        print 'passed', directory
         self.rootDir = directory
         self.filelist = []
         self._showDirTree(directory, None)
@@ -54,7 +53,7 @@ class FileTreeWidget(QtGui.QTreeWidget):
         filelist = []
         if directory [-1] == os.sep:
             directory = directory [:-1]
-        print directory
+
         _item = self._addItem(os.path.basename(directory), item)
         listdir = os.listdir(directory)
         for _dir in listdir:
