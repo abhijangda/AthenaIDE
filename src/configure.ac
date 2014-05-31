@@ -1,0 +1,7 @@
+AC_INIT(, 0.1)
+AM_INIT_AUTOMAKE([1.11 no-define foreign])
+AC_PROG_CXX
+AC_CONFIG_FILES([Makefile])
+PKG_CHECK_MODULES([DEPS], [<deps>])
+AM_SILENT_RULES([yes])
+AC_OUTPUT

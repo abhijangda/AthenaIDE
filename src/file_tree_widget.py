@@ -35,7 +35,27 @@ class FileTreeWidget(QtGui.QTreeWidget):
     def clear(self):
         self.topLevelItem = None
         super(FileTreeWidget, self).clear()
+    
+    def addFile(self, _file):
+        dirs = _file[len(os.path.dirname(self.rootDir)) -1:].split (os.sep)
+        i = 0
+        if dirs[0] == '':
+            i = 1
+        
+        item = self.topLevelItem
+        while i < len(dirs) - 1:
+            j = 0
+            while j < item.childCount():
+                if item.child(j).text(0) == dirs [i]:
+                    item = item.child(j)
+                    break
 
+                j += 1
+            i += 1
+        child = QtGui.QTreeWidgetItem(item)
+        item.addChild(child)
+        child.setText(0, dirs[i])
+        
     def _addItem(self, directory, parent = None):
         item = QtGui.QTreeWidgetItem(None)
         item.setText(0, directory)

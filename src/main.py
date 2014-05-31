@@ -122,13 +122,15 @@ class athena(QtGui.QMainWindow):
         self.addDockWidget(0x1,self.projectdock) #Qt.LeftDockWidgetArea = 0x1
         self.projectdock.setFixedWidth(200)
         self.projectTab = QtGui.QTabWidget(self)
-        self.projectTree = project_tree_view.ProjectTreeView(self.projectdock)
+        self.projectTree = project_tree_view.ProjectTreeView(self.projectdock, self)
         self.fileTree = file_tree_widget.FileTreeWidget(self.projectdock)
         self.projectTab.addTab(self.projectTree, "Project")
         self.projectTab.addTab(self.fileTree, "Files")
         self.projectdock.setWidget(self.projectTab)
         self.connect(self.fileTree, QtCore.SIGNAL("openFileTree(QString)"), self.fileTreeClicked)
         self.connect(self.projectTree, QtCore.SIGNAL("openFileTree(QString)"), self.projectTreeClicked)
+        self.connect(self.projectTree, QtCore.SIGNAL("fileAdded(QString)"), self.fileTree.addFile)
+
         headeritem = self.projectTree.headerItem()
         self.projectTree.setItemHidden(headeritem, True)
         headeritem = self.fileTree.headerItem()
@@ -1925,7 +1927,7 @@ class athena(QtGui.QMainWindow):
                 self.projectTree.setColumnCount(1)
 
             filelist = self.fileTree.showDirTree(os.path.dirname(projpath))
-            self.projectTree.showFiles (filelist, self.current_proj.proj_name)
+            self.projectTree.showFiles (filelist, self.current_proj.proj_name, self.current_proj.proj_path)
             if self.current_proj.proj_gtk_type == 'gtk+':
                 self.gtk_support_functions = gtk_functions ()
                 self.gtk_support_defines = gtk_defines ()
@@ -3000,7 +3002,17 @@ dist_noinst_SCRIPTS = autogen.sh
         pass
     
     def filerename(self):
-        pass
+        if self.tabs.count() == 0:
+            return
+
+        filepath = self.txtarray[self.tabs.currentIndex()].filename
+        savefname = str(QtGui.QFileDialog.getSaveFileName(self,'Rename File',os.path.dirname(filepath),('C Files(*.c);;C++ Files(*.cpp);;All Files(*.*)')))
+        if savefname == '':
+            return
+        
+        os.renames(filepath, savefname)
+        self.txtarray[self.tabs.currentIndex()].filename = filepath
+        self.tabs.setTabText(self.tabs.currentIndex(), os.path.basename(savefname))
 
     def fileopenall(self):
         pass

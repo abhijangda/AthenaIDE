@@ -3,5 +3,5 @@ you can find include files like stdio.h etc. in /usr/include/
 show matching parenthesis
 add file monitor
 add intellisense
-add features of GTK+ Creator
-add GTK+ and gtkmm support also
+Add TODO:, FIXME:, XXX:, NOTE: Tags support.
+Add delete file, open all files in folder, Strip Leading Spaces

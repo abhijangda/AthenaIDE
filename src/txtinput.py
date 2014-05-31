@@ -154,6 +154,8 @@ class txtInputclass(QtGui.QTextEdit):
         self.runToPlainText=0
         self.main_win = parent.parent
         
+        self.setFont(QtGui.QFont("Courier 10 Pitch", 10))
+
         try:            
             settings = ''
             settingsfile = open('./settings.ini','r')
