@@ -224,7 +224,7 @@ class athena(QtGui.QMainWindow):
 
         deleteline = QtGui.QAction('Delete Line',self)
         self.connect(deleteline,QtCore.SIGNAL('triggered()'),self.funcdeleteline)
-        deleteline.setShortcut('SHIFT+DEL')
+        deleteline.setShortcut('SHIFT+CTRL+DELETE')
         deleteline.setStatusTip('Delete Current Line')
 
         moveupline = QtGui.QAction('Move Up Line',self)
@@ -1965,6 +1965,7 @@ class athena(QtGui.QMainWindow):
         vbox.addWidget(self.txtarray[self.tabs.count()])
         page.setLayout(vbox)
         self.tabs.addTab(page, s)
+        self.tabs.setCurrentIndex(self.tabs.count() - 1)
 
         docstr = ''
         self.txtarray[self.tabs.count()-1].filename = filepath
@@ -3303,7 +3304,7 @@ dist_noinst_SCRIPTS = autogen.sh
         cc = txtInput.textCursor()
         cc.select(cc.LineUnderCursor)
         txtInput.setTextCursor(cc)
-        txtInput.textCursor().removeSelectedText()
+        cc.removeSelectedText()
 
     def funcmoveupline(self):
         txtInput = self.txtarray[self.tabs.currentIndex()].txtInput
@@ -3703,6 +3704,10 @@ dist_noinst_SCRIPTS = autogen.sh
         dialog_print.exec_()
 
 app = QtGui.QApplication(sys.argv)
+f = open ("../darkorange.stylesheet", "r")
+s = f.read ()
+f.close ()
+app.setStyleSheet (s)
 #app.setFont(QtGui.QFont(app.font().family(), 10))
 nt = athena()
 nt.show()

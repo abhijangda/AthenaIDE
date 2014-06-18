@@ -65,13 +65,16 @@ class NumberBar(QtGui.QWidget):
         QtGui.QWidget.update(self, *args)
 
     def paintEvent(self, event):
-        
+        opt = QtGui.QStyleOption()
+        opt.initFrom(self)
+        s = self.style()
+        painter = QtGui.QPainter(self)
+        s.drawPrimitive (QtGui.QStyle.PE_Widget, opt, painter, self)        
         contents_y = self.edit.verticalScrollBar().value()
         page_bottom = contents_y + self.edit.viewport().height()
         font_metrics = self.fontMetrics()
         current_block = self.edit.document().findBlock(self.edit.textCursorWithHiddenText().position())
         block_count = self.edit.document().blockCount()            
-        painter = QtGui.QPainter(self)
 
         block = current_block
         line_count_prev = block.blockNumber()+1            
@@ -191,5 +194,5 @@ class NumberBar(QtGui.QWidget):
             count -=1
             
         self.highest_line = line_count_next
-        painter.end()
+        #painter.end()
         QtGui.QWidget.paintEvent(self, event)
